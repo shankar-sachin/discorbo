@@ -1,6 +1,6 @@
 # Discorbo 🤖
 
-A comprehensive Discord bot with 32+ slash commands for fun, games, and utility. Built with Node.js and discord.js v14.
+A comprehensive Discord bot with 32+ slash commands for fun, games, and utility. Built with Node.js and discord.js v14. Visit [the website](https://tinyurl.com/discorbo)
 
 ## Features
 
@@ -40,7 +40,10 @@ A comprehensive Discord bot with 32+ slash commands for fun, games, and utility.
 - `/channel-info` - Channel details
 - `/clear-my-data` - GDPR compliance data removal
 
+# Note: Do not publish Discorbo as your app, just invite the current one to your server [Discorbo](https://discord.com/oauth2/authorize?client_id=1472679226330059023&permissions=277025770560&scope=bot%20applications.commands)
+
 ## Prerequisites
+(I don't recommend this unless you want to copy my work..., just head to [my website](
 
 - Node.js v16.9.0 or higher
 - A Discord bot token ([Create one here](https://discord.com/developers/applications))
