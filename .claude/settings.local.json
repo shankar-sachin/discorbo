@@ -3,7 +3,11 @@
     "allow": [
       "Bash(npm install:*)",
       "Bash(SETUP_INSTRUCTIONS.txt:*)",
-      "Bash(NEW_COMMANDS_SUMMARY.md:*)"
+      "Bash(NEW_COMMANDS_SUMMARY.md:*)",
+      "Bash(ls:*)",
+      "Bash(info/NEW_COMMANDS_SUMMARY.md:*)",
+      "Bash(info/README.md:*)",
+      "Bash(cat:*)"
     ]
   }
 }
