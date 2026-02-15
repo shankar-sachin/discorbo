@@ -1,12 +1,17 @@
 {
   "1070486338643706017": {
-    "trivia": 4,
+    "trivia": 5,
     "trivia-leaderboard": 1,
-    "help": 1,
+    "help": 3,
     "bossraid": 4,
     "vibecheck": 1,
     "userinfo": 1,
     "8ball": 1,
-    "daily": 1
+    "daily": 2,
+    "maze": 6,
+    "calc": 1,
+    "afk": 1,
+    "summon": 2,
+    "maze-leaderboard": 2
   }
 }

@@ -249,33 +249,27 @@ function createGameMessage(gameState, level, timeout = false) {
     const components = gameState.gameOver ? [] : [
         new ActionRowBuilder().addComponents(
             new ButtonBuilder()
-                .setCustomId('maze_placeholder1')
-                .setLabel('　')
-                .setStyle(ButtonStyle.Secondary)
-                .setDisabled(true),
-            new ButtonBuilder()
                 .setCustomId('maze_up')
                 .setEmoji('⬆️')
-                .setStyle(ButtonStyle.Primary),
-            new ButtonBuilder()
-                .setCustomId('maze_placeholder2')
-                .setLabel('　')
-                .setStyle(ButtonStyle.Secondary)
-                .setDisabled(true)
+                .setStyle(ButtonStyle.Primary)
+                .setLabel('Up')
         ),
         new ActionRowBuilder().addComponents(
             new ButtonBuilder()
                 .setCustomId('maze_left')
                 .setEmoji('⬅️')
-                .setStyle(ButtonStyle.Primary),
+                .setStyle(ButtonStyle.Primary)
+                .setLabel('Left'),
             new ButtonBuilder()
                 .setCustomId('maze_down')
                 .setEmoji('⬇️')
-                .setStyle(ButtonStyle.Primary),
+                .setStyle(ButtonStyle.Primary)
+                .setLabel('Down'),
             new ButtonBuilder()
                 .setCustomId('maze_right')
                 .setEmoji('➡️')
                 .setStyle(ButtonStyle.Primary)
+                .setLabel('Right')
         )
     ];
 
