@@ -1,0 +1,688 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <meta name="description" content="Privacy Policy for Discorbo - Discord Bot">
+    <meta name="author" content="Sachin Shankar">
+
+    <!-- Open Graph / Social Media -->
+    <meta property="og:type" content="website">
+    <meta property="og:title" content="Discorbo - Privacy Policy">
+    <meta property="og:description" content="Privacy Policy for the Discorbo Discord Bot">
+
+    <title>Privacy Policy - Discorbo</title>
+
+    <!-- Favicon -->
+    <link rel="icon" href="data:image/svg+xml,<svg xmlns=%22http://www.w3.org/2000/svg%22 viewBox=%220 0 100 100%22><text y=%22.9em%22 font-size=%2290%22>🎮</text></svg>">
+
+    <link rel="stylesheet" href="styles.css">
+
+    <style>
+        .tos-container {
+            max-width: 900px;
+            margin: 0 auto;
+            padding: 120px 20px 60px;
+        }
+
+        .tos-header {
+            text-align: center;
+            margin-bottom: 60px;
+        }
+
+        .tos-header h1 {
+            font-size: 3rem;
+            background: linear-gradient(135deg, var(--primary), var(--secondary));
+            -webkit-background-clip: text;
+            -webkit-text-fill-color: transparent;
+            background-clip: text;
+            margin-bottom: 10px;
+        }
+
+        .tos-updated {
+            color: var(--text-secondary);
+            font-size: 0.9rem;
+        }
+
+        .tos-content {
+            background: rgba(47, 49, 54, 0.4);
+            border: 1px solid rgba(255, 255, 255, 0.1);
+            border-radius: 16px;
+            padding: 40px;
+            backdrop-filter: blur(10px);
+        }
+
+        .tos-section {
+            margin-bottom: 40px;
+        }
+
+        .tos-section:last-child {
+            margin-bottom: 0;
+        }
+
+        .tos-section h2 {
+            color: var(--primary);
+            font-size: 1.8rem;
+            margin-bottom: 15px;
+            display: flex;
+            align-items: center;
+            gap: 10px;
+        }
+
+        .tos-section h3 {
+            color: var(--text-primary);
+            font-size: 1.3rem;
+            margin-top: 25px;
+            margin-bottom: 10px;
+        }
+
+        .tos-section p {
+            color: var(--text-secondary);
+            line-height: 1.8;
+            margin-bottom: 15px;
+        }
+
+        .tos-section ul, .tos-section ol {
+            color: var(--text-secondary);
+            line-height: 1.8;
+            margin-left: 20px;
+            margin-bottom: 15px;
+        }
+
+        .tos-section li {
+            margin-bottom: 8px;
+        }
+
+        .tos-section code {
+            background: rgba(88, 101, 242, 0.2);
+            padding: 2px 6px;
+            border-radius: 4px;
+            color: var(--primary);
+            font-family: 'Courier New', monospace;
+        }
+
+        .highlight-box {
+            background: rgba(88, 101, 242, 0.1);
+            border-left: 4px solid var(--primary);
+            padding: 20px;
+            margin: 20px 0;
+            border-radius: 8px;
+        }
+
+        .highlight-box p {
+            margin: 0;
+        }
+
+        .info-box {
+            background: rgba(87, 242, 135, 0.1);
+            border-left: 4px solid var(--success);
+            padding: 20px;
+            margin: 20px 0;
+            border-radius: 8px;
+        }
+
+        .info-box p {
+            margin: 0;
+            color: var(--text-secondary);
+        }
+
+        .warning-box {
+            background: rgba(254, 231, 92, 0.1);
+            border-left: 4px solid var(--warning);
+            padding: 20px;
+            margin: 20px 0;
+            border-radius: 8px;
+        }
+
+        .warning-box p {
+            margin: 0;
+        }
+
+        .contact-box {
+            background: linear-gradient(135deg, rgba(88, 101, 242, 0.1), rgba(235, 69, 158, 0.1));
+            border: 1px solid rgba(88, 101, 242, 0.3);
+            border-radius: 12px;
+            padding: 30px;
+            text-align: center;
+            margin-top: 40px;
+        }
+
+        .contact-box h3 {
+            color: var(--primary);
+            margin-bottom: 15px;
+        }
+
+        .data-table {
+            width: 100%;
+            margin: 20px 0;
+            border-collapse: collapse;
+        }
+
+        .data-table th,
+        .data-table td {
+            padding: 12px;
+            text-align: left;
+            border-bottom: 1px solid rgba(255, 255, 255, 0.1);
+        }
+
+        .data-table th {
+            background: rgba(88, 101, 242, 0.2);
+            color: var(--primary);
+            font-weight: 600;
+        }
+
+        .data-table td {
+            color: var(--text-secondary);
+        }
+
+        .back-home {
+            display: inline-flex;
+            align-items: center;
+            gap: 8px;
+            margin-bottom: 40px;
+            color: var(--primary);
+            text-decoration: none;
+            font-weight: 500;
+            transition: all 0.3s ease;
+        }
+
+        .back-home:hover {
+            gap: 12px;
+            color: var(--secondary);
+        }
+
+        @media (max-width: 768px) {
+            .tos-container {
+                padding: 100px 15px 40px;
+            }
+
+            .tos-header h1 {
+                font-size: 2rem;
+            }
+
+            .tos-content {
+                padding: 25px;
+            }
+
+            .tos-section h2 {
+                font-size: 1.5rem;
+            }
+
+            .data-table {
+                font-size: 0.85rem;
+            }
+
+            .data-table th,
+            .data-table td {
+                padding: 8px;
+            }
+        }
+    </style>
+</head>
+<body>
+    <!-- Navbar -->
+    <nav class="navbar">
+        <div class="container">
+            <div class="nav-brand">
+                <span class="logo">🎮</span>
+                <span class="brand-name">Discorbo</span>
+            </div>
+            <div class="nav-links">
+                <a href="index.html">Home</a>
+                <a href="index.html#features">Features</a>
+                <a href="index.html#commands">Commands</a>
+                <a href="privacy.html" class="active">Privacy</a>
+            </div>
+        </div>
+    </nav>
+
+    <!-- Privacy Content -->
+    <div class="tos-container">
+        <a href="index.html" class="back-home">
+            ← Back to Home
+        </a>
+
+        <div class="tos-header">
+            <h1>Privacy Policy</h1>
+            <p class="tos-updated">Last Updated: February 15, 2026</p>
+        </div>
+
+        <div class="tos-content">
+            <!-- Introduction -->
+            <div class="tos-section">
+                <h2>🔒 Introduction</h2>
+                <p>
+                    At Discorbo, we take your privacy seriously. This Privacy Policy explains how we collect, use, store, and protect your personal information when you use the Discorbo Discord bot ("Bot", "Service", "we", "us", or "our").
+                </p>
+                <p>
+                    By using Discorbo, you agree to the collection and use of information in accordance with this policy. If you do not agree with our policies and practices, do not use the Bot.
+                </p>
+
+                <div class="info-box">
+                    <p><strong>✅ In short:</strong> We only collect minimal data necessary for the Bot to function. Your data is stored locally, never sold, and you can delete it anytime with <code>/clear-my-data</code>.</p>
+                </div>
+            </div>
+
+            <!-- Information We Collect -->
+            <div class="tos-section">
+                <h2>📊 Information We Collect</h2>
+
+                <h3>1. Automatically Collected Information</h3>
+                <p>When you interact with Discorbo, we automatically collect:</p>
+
+                <table class="data-table">
+                    <thead>
+                        <tr>
+                            <th>Data Type</th>
+                            <th>What We Collect</th>
+                            <th>Purpose</th>
+                        </tr>
+                    </thead>
+                    <tbody>
+                        <tr>
+                            <td><strong>User Identifiers</strong></td>
+                            <td>Discord User ID, Username, Avatar URL</td>
+                            <td>Identify you in commands and leaderboards</td>
+                        </tr>
+                        <tr>
+                            <td><strong>Server Information</strong></td>
+                            <td>Server ID, Server Name</td>
+                            <td>Provide server-specific features</td>
+                        </tr>
+                        <tr>
+                            <td><strong>Command Usage</strong></td>
+                            <td>Command name, timestamp, parameters</td>
+                            <td>Analytics and debugging</td>
+                        </tr>
+                        <tr>
+                            <td><strong>Message Content</strong></td>
+                            <td>Content you send in commands</td>
+                            <td>Process commands (not stored long-term)</td>
+                        </tr>
+                    </tbody>
+                </table>
+
+                <h3>2. User-Provided Information</h3>
+                <p>You voluntarily provide information when you:</p>
+                <ul>
+                    <li>Use commands that require input (e.g., <code>/remind</code>, <code>/afk</code>, <code>/poll</code>)</li>
+                    <li>Participate in games and earn scores/achievements</li>
+                    <li>Set preferences or custom settings</li>
+                    <li>Interact with buttons, dropdowns, or other UI components</li>
+                </ul>
+
+                <h3>3. Game and Activity Data</h3>
+                <p>For game features, we may store:</p>
+                <ul>
+                    <li><strong>Trivia Scores:</strong> Your answers, score, and leaderboard position</li>
+                    <li><strong>RPG Data:</strong> Quest progress, battle history, inventory, XP, levels</li>
+                    <li><strong>Maze Game:</strong> Completion times, coins collected, moves made</li>
+                    <li><strong>Daily Rewards:</strong> Streak count, last claim timestamp</li>
+                    <li><strong>Loot & Items:</strong> Items collected, rarity, timestamps</li>
+                </ul>
+
+                <h3>4. Preference Data</h3>
+                <ul>
+                    <li><strong>Reminders:</strong> Reminder text, scheduled time, channel ID</li>
+                    <li><strong>AFK Status:</strong> AFK message, timestamp when set</li>
+                    <li><strong>Cooldowns:</strong> Last command usage time (temporary, cleared after cooldown expires)</li>
+                </ul>
+            </div>
+
+            <!-- How We Use Your Information -->
+            <div class="tos-section">
+                <h2>⚙️ How We Use Your Information</h2>
+                <p>We use the collected information for the following purposes:</p>
+
+                <ol>
+                    <li><strong>Provide Core Functionality</strong>
+                        <ul>
+                            <li>Execute commands you request</li>
+                            <li>Display user and server information</li>
+                            <li>Manage game state and progress</li>
+                        </ul>
+                    </li>
+                    <li><strong>Enhance User Experience</strong>
+                        <ul>
+                            <li>Maintain leaderboards and rankings</li>
+                            <li>Track achievements and progress</li>
+                            <li>Deliver scheduled features (reminders, timers)</li>
+                            <li>Provide personalized responses (AFK messages)</li>
+                        </ul>
+                    </li>
+                    <li><strong>Improve the Bot</strong>
+                        <ul>
+                            <li>Analyze command usage to identify popular features</li>
+                            <li>Debug errors and fix bugs</li>
+                            <li>Optimize performance and reliability</li>
+                        </ul>
+                    </li>
+                    <li><strong>Ensure Security and Compliance</strong>
+                        <ul>
+                            <li>Prevent spam and abuse through cooldowns</li>
+                            <li>Detect and block malicious activity</li>
+                            <li>Comply with legal obligations</li>
+                        </ul>
+                    </li>
+                </ol>
+
+                <div class="warning-box">
+                    <p><strong>⚠️ We will NEVER:</strong> Sell your data, share it with advertisers, or use it for marketing purposes outside of Bot functionality.</p>
+                </div>
+            </div>
+
+            <!-- Data Storage and Security -->
+            <div class="tos-section">
+                <h2>🛡️ Data Storage and Security</h2>
+
+                <h3>Where Your Data is Stored</h3>
+                <p>
+                    All data is stored <strong>locally on our servers</strong> in JSON files. We do not use third-party databases or cloud storage services for user data.
+                </p>
+
+                <h3>How Long We Retain Data</h3>
+                <table class="data-table">
+                    <thead>
+                        <tr>
+                            <th>Data Type</th>
+                            <th>Retention Period</th>
+                        </tr>
+                    </thead>
+                    <tbody>
+                        <tr>
+                            <td>Game Scores & Progress</td>
+                            <td>Indefinitely (until you delete it)</td>
+                        </tr>
+                        <tr>
+                            <td>Reminders</td>
+                            <td>Until executed or deleted</td>
+                        </tr>
+                        <tr>
+                            <td>AFK Status</td>
+                            <td>Until you send a message or clear it</td>
+                        </tr>
+                        <tr>
+                            <td>Command Logs</td>
+                            <td>30-90 days (for debugging)</td>
+                        </tr>
+                        <tr>
+                            <td>Cooldown Data</td>
+                            <td>Temporary (cleared after cooldown expires)</td>
+                        </tr>
+                    </tbody>
+                </table>
+
+                <h3>Security Measures</h3>
+                <p>We implement industry-standard security practices:</p>
+                <ul>
+                    <li>🔐 Data stored in protected file systems with restricted access</li>
+                    <li>🔒 No passwords or sensitive credentials are stored</li>
+                    <li>🛡️ Regular security audits and updates</li>
+                    <li>⚡ Secure communication with Discord via HTTPS/WSS</li>
+                    <li>📝 Regular backups to prevent data loss</li>
+                </ul>
+
+                <div class="highlight-box">
+                    <p><strong>Note:</strong> While we take reasonable precautions, no method of electronic storage is 100% secure. We cannot guarantee absolute security of your data.</p>
+                </div>
+            </div>
+
+            <!-- Your Rights and Choices -->
+            <div class="tos-section">
+                <h2>✊ Your Rights and Choices</h2>
+
+                <h3>Right to Access</h3>
+                <p>
+                    You can request a copy of all data we have stored about you. Contact us with your Discord User ID to request your data.
+                </p>
+
+                <h3>Right to Deletion</h3>
+                <p>
+                    You can delete your data at any time:
+                </p>
+                <ul>
+                    <li><strong>Quick Delete:</strong> Use <code>/clear-my-data</code> to instantly remove all your personal data from our systems</li>
+                    <li><strong>Manual Request:</strong> Contact us to request manual deletion</li>
+                    <li><strong>What Gets Deleted:</strong> Scores, game progress, reminders, AFK status, preferences, and command history</li>
+                </ul>
+
+                <div class="info-box">
+                    <p><strong>⚠️ Important:</strong> Data deletion is permanent and cannot be undone. Your leaderboard positions and achievements will be lost.</p>
+                </div>
+
+                <h3>Right to Opt-Out</h3>
+                <p>
+                    You can stop using the Bot at any time by:
+                </p>
+                <ul>
+                    <li>Simply not using commands</li>
+                    <li>Removing the Bot from your server (if you're an admin)</li>
+                    <li>Blocking the Bot (prevents DMs and mentions)</li>
+                </ul>
+
+                <h3>GDPR Rights (EU Users)</h3>
+                <p>If you are in the European Union, you have additional rights under GDPR:</p>
+                <ul>
+                    <li><strong>Right to Rectification:</strong> Request correction of inaccurate data</li>
+                    <li><strong>Right to Restriction:</strong> Request limitation of processing</li>
+                    <li><strong>Right to Data Portability:</strong> Receive your data in a machine-readable format</li>
+                    <li><strong>Right to Object:</strong> Object to processing of your data</li>
+                    <li><strong>Right to Lodge a Complaint:</strong> File a complaint with your local data protection authority</li>
+                </ul>
+            </div>
+
+            <!-- Third-Party Services -->
+            <div class="tos-section">
+                <h2>🔗 Third-Party Services</h2>
+                <p>
+                    Discorbo integrates with external APIs to provide certain features. These services may collect their own data:
+                </p>
+
+                <table class="data-table">
+                    <thead>
+                        <tr>
+                            <th>Service</th>
+                            <th>Used For</th>
+                            <th>Data Shared</th>
+                        </tr>
+                    </thead>
+                    <tbody>
+                        <tr>
+                            <td>Discord API</td>
+                            <td>All bot functionality</td>
+                            <td>User IDs, Server IDs, Messages (as per Discord's Privacy Policy)</td>
+                        </tr>
+                        <tr>
+                            <td>JokeAPI</td>
+                            <td>/joke command</td>
+                            <td>None (public API)</td>
+                        </tr>
+                        <tr>
+                            <td>Reddit JSON API</td>
+                            <td>/meme command</td>
+                            <td>None (public API)</td>
+                        </tr>
+                        <tr>
+                            <td>Open Trivia DB</td>
+                            <td>/trivia command</td>
+                            <td>None (public API)</td>
+                        </tr>
+                    </tbody>
+                </table>
+
+                <p>
+                    We do not control these third-party services and are not responsible for their privacy practices. Review their privacy policies:
+                </p>
+                <ul>
+                    <li><a href="https://discord.com/privacy" target="_blank" style="color: var(--primary);">Discord Privacy Policy</a></li>
+                    <li><a href="https://sv443.net/jokeapi/v2" target="_blank" style="color: var(--primary);">JokeAPI Documentation</a></li>
+                    <li><a href="https://www.reddit.com/policies/privacy-policy" target="_blank" style="color: var(--primary);">Reddit Privacy Policy</a></li>
+                </ul>
+            </div>
+
+            <!-- Children's Privacy -->
+            <div class="tos-section">
+                <h2>👶 Children's Privacy</h2>
+                <p>
+                    Discorbo does not knowingly collect information from children under 13 (or under 16 in the EU). Discord's Terms of Service require users to be at least 13 years old.
+                </p>
+                <p>
+                    If you believe we have collected information from a child under the minimum age, please contact us immediately, and we will delete the data.
+                </p>
+            </div>
+
+            <!-- Cookies and Tracking -->
+            <div class="tos-section">
+                <h2>🍪 Cookies and Tracking</h2>
+                <p>
+                    <strong>We do NOT use cookies or tracking technologies.</strong>
+                </p>
+                <p>
+                    Our website (if applicable) may use basic analytics, but the Bot itself does not use cookies, pixels, or other tracking mechanisms beyond what's necessary for Discord API communication.
+                </p>
+            </div>
+
+            <!-- Data Sharing and Disclosure -->
+            <div class="tos-section">
+                <h2>🤝 Data Sharing and Disclosure</h2>
+                <p>
+                    We do <strong>NOT</strong> sell, rent, or trade your personal information to third parties.
+                </p>
+
+                <h3>We May Disclose Your Data Only In These Situations:</h3>
+                <ul>
+                    <li><strong>With Your Consent:</strong> If you explicitly agree to share your data</li>
+                    <li><strong>Legal Compliance:</strong> If required by law, court order, or government request</li>
+                    <li><strong>Security Threats:</strong> To prevent fraud, abuse, or security threats</li>
+                    <li><strong>Service Providers:</strong> With hosting providers (who are contractually obligated to protect your data)</li>
+                </ul>
+
+                <h3>Publicly Visible Information</h3>
+                <p>
+                    Some data may be publicly visible by design:
+                </p>
+                <ul>
+                    <li><strong>Leaderboards:</strong> Your username and scores are visible to other users</li>
+                    <li><strong>Polls:</strong> Your vote may be visible depending on server settings</li>
+                    <li><strong>Game Results:</strong> Match results in public channels are visible to all users</li>
+                </ul>
+            </div>
+
+            <!-- International Data Transfers -->
+            <div class="tos-section">
+                <h2>🌍 International Data Transfers</h2>
+                <p>
+                    Your data may be processed on servers located outside your country. By using Discorbo, you consent to the transfer of your information to countries that may have different data protection laws.
+                </p>
+                <p>
+                    We ensure adequate safeguards are in place to protect your data in accordance with this Privacy Policy.
+                </p>
+            </div>
+
+            <!-- Changes to Privacy Policy -->
+            <div class="tos-section">
+                <h2>📝 Changes to This Privacy Policy</h2>
+                <p>
+                    We may update this Privacy Policy from time to time to reflect changes in our practices or for legal reasons. Changes will be effective immediately upon posting.
+                </p>
+                <p>
+                    The "Last Updated" date at the top indicates when the policy was last revised. We encourage you to review this policy periodically.
+                </p>
+
+                <div class="highlight-box">
+                    <p><strong>Material Changes:</strong> If we make significant changes that affect your rights, we will notify users via Discord announcements or in-app notifications.</p>
+                </div>
+            </div>
+
+            <!-- Contact Us -->
+            <div class="tos-section">
+                <h2>📧 Contact Us</h2>
+                <div class="contact-box">
+                    <h3>Questions About Your Privacy?</h3>
+                    <p>
+                        If you have questions, concerns, or requests regarding this Privacy Policy or your personal data, please contact us:
+                    </p>
+                    <p style="margin-top: 20px;">
+                        <strong>Developer:</strong> Sachin Shankar<br>
+                        <strong>GitHub:</strong> <a href="https://github.com/sachinshankar" target="_blank" style="color: var(--primary);">github.com/sachinshankar</a>
+                    </p>
+                    <p style="margin-top: 20px; font-size: 0.9rem; color: var(--text-secondary);">
+                        We aim to respond to all privacy inquiries within 30 days.
+                    </p>
+                </div>
+            </div>
+
+            <!-- Quick Summary -->
+            <div class="tos-section">
+                <h2>📋 Quick Summary</h2>
+                <div class="info-box">
+                    <p><strong>TL;DR - Your Privacy at a Glance:</strong></p>
+                    <ul style="margin: 15px 0 0 0; padding-left: 20px;">
+                        <li>✅ We collect minimal data (User ID, scores, preferences)</li>
+                        <li>✅ Data stored locally, not sold or shared</li>
+                        <li>✅ You can delete your data anytime with <code>/clear-my-data</code></li>
+                        <li>✅ GDPR compliant for EU users</li>
+                        <li>✅ No cookies, no ads, no tracking</li>
+                        <li>✅ Open-source and transparent</li>
+                    </ul>
+                </div>
+
+                <div class="highlight-box" style="margin-top: 20px;">
+                    <p>
+                        <strong>BY USING DISCORBO, YOU ACKNOWLEDGE THAT YOU HAVE READ AND UNDERSTOOD THIS PRIVACY POLICY.</strong>
+                    </p>
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <!-- Footer -->
+    <footer class="footer">
+        <div class="container">
+            <div class="footer-content">
+                <div class="footer-section">
+                    <h3>🎮 Discorbo</h3>
+                    <p>Your ultimate Discord companion for fun, games, and productivity.</p>
+                </div>
+
+                <div class="footer-section">
+                    <h4>Quick Links</h4>
+                    <ul class="footer-links">
+                        <li><a href="index.html">Home</a></li>
+                        <li><a href="index.html#features">Features</a></li>
+                        <li><a href="index.html#commands">Commands</a></li>
+                        <li><a href="tos.html">Terms of Service</a></li>
+                    </ul>
+                </div>
+
+                <div class="footer-section">
+                    <h4>Legal</h4>
+                    <ul class="footer-links">
+                        <li><a href="privacy.html">Privacy Policy</a></li>
+                        <li><a href="tos.html">Terms of Service</a></li>
+                        <li><a href="https://discord.com/terms" target="_blank">Discord ToS</a></li>
+                        <li><a href="https://discord.com/guidelines" target="_blank">Community Guidelines</a></li>
+                    </ul>
+                </div>
+
+                <div class="footer-section">
+                    <h4>Your Privacy</h4>
+                    <p style="font-size: 0.9rem; color: var(--text-secondary);">
+                        We respect your privacy. Data stored locally, GDPR compliant.<br>
+                        Delete your data anytime with <code>/clear-my-data</code>
+                    </p>
+                </div>
+            </div>
+
+            <div class="footer-bottom">
+                <p>Made with ❤️ by <strong>Sachin Shankar</strong></p>
+                <p style="font-size: 0.85rem; color: var(--text-secondary); margin-top: 5px;">
+                    Discorbo is not affiliated with Discord Inc.
+                </p>
+            </div>
+        </div>
+    </footer>
+
+    <script src="script.js"></script>
+</body>
+</html>
