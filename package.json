@@ -1,0 +1,26 @@
+{
+  "name": "discorbo",
+  "version": "1.0.0",
+  "description": "A comprehensive Discord bot with 32+ slash commands for fun and utility",
+  "main": "src/index.js",
+  "scripts": {
+    "start": "node src/index.js",
+    "deploy": "node src/deploy-commands.js",
+    "dev": "nodemon src/index.js"
+  },
+  "keywords": ["discord", "bot", "slash-commands"],
+  "author": "",
+  "license": "MIT",
+  "dependencies": {
+    "discord.js": "^14.14.1",
+    "dotenv": "^16.4.5",
+    "axios": "^1.6.7",
+    "mathjs": "^12.3.0"
+  },
+  "devDependencies": {
+    "nodemon": "^3.0.3"
+  },
+  "engines": {
+    "node": ">=16.9.0"
+  }
+}

@@ -1,0 +1,9 @@
+{
+  "permissions": {
+    "allow": [
+      "Bash(npm install:*)",
+      "Bash(SETUP_INSTRUCTIONS.txt:*)",
+      "Bash(NEW_COMMANDS_SUMMARY.md:*)"
+    ]
+  }
+}
