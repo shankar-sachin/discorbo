@@ -82,6 +82,7 @@ const client = new Client({
 
 // Initialize command collection
 client.commands = new Collection();
+const includeJSCommands = process.env.JS_COMMANDS === 'true';
 
 /**
  * Recursively load command files from a directory
@@ -94,6 +95,10 @@ function loadCommands(dir) {
     const stat = fs.statSync(filePath);
 
     if (stat.isDirectory()) {
+      if (!includeJSCommands) {
+        logger.info('Skipping JS commands (Go runtime is primary).');
+        continue;
+      }
       // Recursively load commands from subdirectories
       loadCommands(filePath);
     } else if (file.endsWith('.js')) {

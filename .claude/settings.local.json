@@ -10,7 +10,9 @@
       "Bash(cat:*)",
       "Bash(npm run deploy:*)",
       "Bash(npm start)",
-      "Bash(curl:*)"
+      "Bash(curl:*)",
+      "Bash(go build:*)",
+      "Bash(go mod tidy:*)"
     ]
   }
 }

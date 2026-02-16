@@ -11,6 +11,7 @@ const config = require('./config');
 const logger = require('./utils/logger');
 
 const commands = [];
+const includeJSCommands = process.env.JS_COMMANDS === 'true';
 
 /**
  * Recursively load command files and extract data
@@ -23,6 +24,10 @@ function loadCommandData(dir) {
     const stat = fs.statSync(filePath);
 
     if (stat.isDirectory()) {
+      if (!includeJSCommands) {
+        logger.info('Skipping JS command deploy (Go owns commands by default).');
+        continue;
+      }
       loadCommandData(filePath);
     } else if (file.endsWith('.js')) {
       try {

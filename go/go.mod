@@ -1,4 +1,4 @@
-module discorbo/mazebot
+module discorbo
 
 go 1.22
 
