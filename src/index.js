@@ -13,6 +13,62 @@ const { setupGlobalErrorHandlers } = require('./utils/errorHandler');
 // Setup global error handlers
 setupGlobalErrorHandlers();
 
+// Prevent multiple bot instances from running concurrently in this workspace.
+const lockPath = path.join(__dirname, '.bot.lock');
+let lockFd = null;
+try {
+  lockFd = fs.openSync(lockPath, 'wx');
+  fs.writeFileSync(lockFd, String(process.pid), 'utf8');
+} catch (error) {
+  if (error.code === 'EEXIST') {
+    // Recover from stale lock files after an unclean shutdown.
+    let staleLock = false;
+    try {
+      const existingPid = Number.parseInt(fs.readFileSync(lockPath, 'utf8').trim(), 10);
+      if (!Number.isInteger(existingPid)) {
+        staleLock = true;
+      } else {
+        try {
+          process.kill(existingPid, 0);
+        } catch (_) {
+          staleLock = true;
+        }
+      }
+    } catch (_) {
+      staleLock = true;
+    }
+
+    if (staleLock) {
+      try { fs.unlinkSync(lockPath); } catch (_) {}
+      lockFd = fs.openSync(lockPath, 'wx');
+      fs.writeFileSync(lockFd, String(process.pid), 'utf8');
+    } else {
+      logger.error('Another bot instance is already running (.bot.lock exists). Exiting this process.');
+      process.exit(1);
+    }
+  } else {
+    throw error;
+  }
+}
+
+function releaseLock() {
+  try {
+    if (lockFd !== null) {
+      fs.closeSync(lockFd);
+      lockFd = null;
+    }
+    if (fs.existsSync(lockPath)) {
+      fs.unlinkSync(lockPath);
+    }
+  } catch (_) {
+    // Best-effort cleanup; ignore failures.
+  }
+}
+
+process.on('exit', releaseLock);
+process.on('SIGINT', () => { releaseLock(); process.exit(0); });
+process.on('SIGTERM', () => { releaseLock(); process.exit(0); });
+
 // Create Discord client with required intents
 const client = new Client({
   intents: [
@@ -114,6 +170,7 @@ client.login(config.token)
   })
   .catch((error) => {
     logger.error('Failed to login:', error.message);
+    releaseLock();
     process.exit(1);
   });
 

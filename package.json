@@ -4,9 +4,13 @@
   "description": "A comprehensive Discord bot with 32+ slash commands for fun and utility",
   "main": "src/index.js",
   "scripts": {
-    "start": "node src/index.js",
+    "build": "npm run build:go-maze",
+    "start": "powershell -ExecutionPolicy Bypass -File go/mazebot/run.ps1",
+    "start:js": "node src/index.js",
     "deploy": "node src/deploy-commands.js",
-    "dev": "nodemon src/index.js"
+    "dev": "nodemon src/index.js",
+    "start:go-maze": "powershell -ExecutionPolicy Bypass -File go/mazebot/run.ps1",
+    "build:go-maze": "powershell -ExecutionPolicy Bypass -File go/mazebot/build.ps1"
   },
   "keywords": ["discord", "bot", "slash-commands"],
   "author": "",

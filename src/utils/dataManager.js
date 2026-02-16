@@ -20,7 +20,8 @@ const defaultSchemas = {
   'loot.json': {},
   'quotes.json': {},
   'bossraid.json': {},
-  'daily-rewards.json': {}
+  'daily-rewards.json': {},
+  'maze-scores.json': {}
 };
 
 /**
@@ -94,7 +95,14 @@ function writeJSON(filename, data) {
 
     // Clean up old backup
     if (fs.existsSync(backupPath)) {
-      fs.unlinkSync(backupPath);
+      try {
+        fs.unlinkSync(backupPath);
+      } catch (cleanupError) {
+        // On Windows, concurrent processes can briefly lock this file.
+        if (cleanupError.code !== 'ENOENT' && cleanupError.code !== 'EPERM') {
+          throw cleanupError;
+        }
+      }
     }
 
     logger.debug(`Wrote data to ${filename}`);
@@ -150,7 +158,8 @@ function clearAllUserData(userId) {
     'quests.json',
     'battle-stats.json',
     'loot.json',
-    'daily-rewards.json'
+    'daily-rewards.json',
+    'maze-scores.json'
   ];
 
   files.forEach(filename => {

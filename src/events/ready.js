@@ -7,7 +7,7 @@ const logger = require('../utils/logger');
 const { checkReminders } = require('../utils/reminderChecker');
 
 module.exports = {
-  name: 'ready',
+  name: 'clientReady',
   once: true,
 
   async execute(client) {

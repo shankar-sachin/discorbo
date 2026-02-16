@@ -25,6 +25,11 @@ module.exports = {
       return;
     }
 
+    // Allow Go runtime to own specific commands during incremental migration.
+    if (process.env.MAZE_RUNTIME === 'go' && ['maze', 'maze-leaderboard'].includes(interaction.commandName)) {
+      return;
+    }
+
     // Check cooldown
     const cooldownAmount = command.cooldown || 3;
     const { onCooldown, timeLeft } = checkCooldown(

@@ -4,6 +4,7 @@
       "name": "Captain Cringe",
       "emoji": "🤡",
       "maxHP": 4500,
+      "currentHP": 3807,
       "description": "Keeper of embarrassing memories from middle school",
       "loot": [
         "Memory Eraser",
@@ -11,18 +12,17 @@
         "Second Chance Token",
         "Cringe Shield"
       ],
-      "currentHP": 4233,
       "spawnedAt": 1771185355502
     },
     "participants": {
       "1070486338643706017": {
         "username": "sachinshankar",
-        "damage": 267,
-        "lastAttack": 1771185366670,
-        "attacks": 1
+        "damage": 693,
+        "lastAttack": 1771274183548,
+        "attacks": 3
       }
     },
-    "spawnedAt": null,
-    "totalDamage": 267
+    "spawnedAt": 0,
+    "totalDamage": 693
   }
 }

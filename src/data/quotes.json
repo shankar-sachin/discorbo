@@ -1,0 +1,21 @@
+{
+  "1153496849139904552": {
+    "quotes": [
+      {
+        "id": 1,
+        "text": "\"The Man With A Plan is Sachin Shankar\" - Bill Gates",
+        "author": {
+          "id": "1070486338643706017",
+          "username": "sachinshankar",
+          "avatar": "https://cdn.discordapp.com/avatars/1070486338643706017/d91aecaa09b9af49c2b494397961519e.webp"
+        },
+        "addedBy": {
+          "id": "1070486338643706017",
+          "username": "sachinshankar"
+        },
+        "timestamp": 1771190008636,
+        "guildId": "1153496849139904552"
+      }
+    ]
+  }
+}

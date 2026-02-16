@@ -24,10 +24,16 @@ Thumbs.db
 *.swp
 *.swo
 *~
+.env
+.env.example
 
 # Temp files
 *.tmp
 .temp/
+.go/
+go/mazebot/.gopath/
+go/mazebot/.gocache/
+src/.bot.lock
 
 CLAUDE.md
-SETUP_INSTRUCTIONS.md
+SETUP_INSTRUCTIONS.txt

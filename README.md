@@ -1,6 +1,6 @@
 # Discorbo 🤖
 
-A comprehensive Discord bot with 32+ slash commands for fun, games, and utility. Built with Node.js and discord.js v14. Visit [the website](https://tinyurl.com/discorbo)
+A comprehensive Discord bot with 32+ slash commands for fun, games, and utility. Built with Node.js and discord.js v14. Visit [the website](https://tinyurl.com/discorbo).
 
 ## Features
 
