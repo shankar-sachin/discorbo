@@ -8,12 +8,12 @@
     "userinfo": 1,
     "8ball": 1,
     "daily": 3,
-    "maze": 15,
+    "maze": 17,
     "calc": 4,
     "afk": 1,
     "summon": 2,
     "maze-leaderboard": 3,
     "quote": 3,
-    "battle": 2
+    "battle": 4
   }
 }

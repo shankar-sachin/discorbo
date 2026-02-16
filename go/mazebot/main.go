@@ -288,7 +288,15 @@ func main() {
 
 func registerFunCommands(s *discordgo.Session, appID, guildID string) error {
 	cmds := funCommands()
-	_, err := s.ApplicationCommandBulkOverwrite(appID, guildID, cmds)
+	if guildID != "" {
+		if _, err := s.ApplicationCommandBulkOverwrite(appID, guildID, cmds); err != nil {
+			return err
+		}
+		// Clear global commands so users don't see duplicates when guild-scoped commands are active.
+		_, err := s.ApplicationCommandBulkOverwrite(appID, "", []*discordgo.ApplicationCommand{})
+		return err
+	}
+	_, err := s.ApplicationCommandBulkOverwrite(appID, "", cmds)
 	return err
 }
 
@@ -394,9 +402,9 @@ func handleSimpleFun(s *discordgo.Session, i *discordgo.InteractionCreate) {
 	switch cmd {
 	case "coinflip":
 		if rand.Intn(2) == 0 {
-			respondText(s, i, "Heads")
+			respondText(s, i, "\U0001FA99 Heads")
 		} else {
-			respondText(s, i, "Tails")
+			respondText(s, i, "\U0001FA99 Tails")
 		}
 	case "dice":
 		sides := int64(6)
@@ -425,11 +433,11 @@ func handleSimpleFun(s *discordgo.Session, i *discordgo.InteractionCreate) {
 			total += r
 			rolls = append(rolls, strconv.Itoa(r))
 		}
-		respondText(s, i, fmt.Sprintf("Rolled %dd%d: [%s] Total=%d", count, sides, strings.Join(rolls, ", "), total))
+		respondText(s, i, fmt.Sprintf("\U0001F3B2 Rolled %dd%d: [%s]\n\U0001F4CA Total: %d", count, sides, strings.Join(rolls, ", "), total))
 	case "8ball":
 		answers := []string{"Yes", "No", "Maybe", "Definitely", "Unclear", "Ask later"}
 		question := optionString(opts, "question", "")
-		respondText(s, i, fmt.Sprintf("Question: %s\nAnswer: %s", question, answers[rand.Intn(len(answers))]))
+		respondText(s, i, fmt.Sprintf("\U0001F52E Question: %s\n\U0001F3B1 Answer: %s", question, answers[rand.Intn(len(answers))]))
 	case "random-number":
 		min := int64(1)
 		max := int64(100)
@@ -589,9 +597,9 @@ var questTemplates = []questEntry{
 }
 
 var raidBosses = []raidBoss{
-	{Name: "The Lag Monster", Emoji: "👾", MaxHP: 5000, Description: "A creature that feeds on your WiFi", Loot: []string{"Router of Legends", "Ping Reducer", "5G Crystal"}},
-	{Name: "The Monday Overlord", Emoji: "📅", MaxHP: 7000, Description: "The most feared entity", Loot: []string{"Weekend Extension", "Coffee of Awakening", "Skip Monday Pass"}},
-	{Name: "Social Anxiety Dragon", Emoji: "🐉", MaxHP: 5500, Description: "Guards social skills treasure", Loot: []string{"Conversation Starter Kit", "Confidence Amulet", "Small Talk Guide"}},
+	{Name: "The Lag Monster", Emoji: "\U0001F47E", MaxHP: 5000, Description: "A creature that feeds on your WiFi", Loot: []string{"Router of Legends", "Ping Reducer", "5G Crystal"}},
+	{Name: "The Monday Overlord", Emoji: "\U0001F4C5", MaxHP: 7000, Description: "The most feared entity", Loot: []string{"Weekend Extension", "Coffee of Awakening", "Skip Monday Pass"}},
+	{Name: "Social Anxiety Dragon", Emoji: "\U0001F409", MaxHP: 5500, Description: "Guards social skills treasure", Loot: []string{"Conversation Starter Kit", "Confidence Amulet", "Small Talk Guide"}},
 }
 
 type lootTable struct {
@@ -601,13 +609,13 @@ type lootTable struct {
 }
 
 var lootTables = map[string]lootTable{
-	"common":    {Name: "Common", Emoji: "⚪", Items: []string{"Broken Pencil", "Old Receipt", "Bottle Cap"}},
-	"uncommon":  {Name: "Uncommon", Emoji: "🟢", Items: []string{"Working Charger", "Good Vibes", "Fresh Pizza Slice"}},
-	"rare":      {Name: "Rare", Emoji: "🔵", Items: []string{"Productive Day", "Extra Fries in Bag", "Reply from Crush"}},
-	"epic":      {Name: "Epic", Emoji: "🟣", Items: []string{"WiFi That Actually Works", "Inbox Zero Achievement", "Main Character Moment"}},
-	"legendary": {Name: "Legendary", Emoji: "🟡", Items: []string{"Extra Day Weekend", "Unlimited Garlic Bread", "Infinite Battery Life"}},
-	"cosmic":    {Name: "Cosmic", Emoji: "🌌", Items: []string{"Pause Time", "World Peace Token", "Respec Button for Life Choices"}},
-	"cursed":    {Name: "Cursed", Emoji: "💀", Items: []string{"Wet Socks (Permanent)", "Eternal Loading Screen", "Unstoppable Hiccups"}},
+	"common":    {Name: "Common", Emoji: "\u26AA", Items: []string{"Broken Pencil", "Old Receipt", "Bottle Cap"}},
+	"uncommon":  {Name: "Uncommon", Emoji: "\U0001F7E2", Items: []string{"Working Charger", "Good Vibes", "Fresh Pizza Slice"}},
+	"rare":      {Name: "Rare", Emoji: "\U0001F535", Items: []string{"Productive Day", "Extra Fries in Bag", "Reply from Crush"}},
+	"epic":      {Name: "Epic", Emoji: "\U0001F7E3", Items: []string{"WiFi That Actually Works", "Inbox Zero Achievement", "Main Character Moment"}},
+	"legendary": {Name: "Legendary", Emoji: "\U0001F7E1", Items: []string{"Extra Day Weekend", "Unlimited Garlic Bread", "Infinite Battery Life"}},
+	"cosmic":    {Name: "Cosmic", Emoji: "\U0001F30C", Items: []string{"Pause Time", "World Peace Token", "Respec Button for Life Choices"}},
+	"cursed":    {Name: "Cursed", Emoji: "\U0001F480", Items: []string{"Wet Socks (Permanent)", "Eternal Loading Screen", "Unstoppable Hiccups"}},
 }
 
 func dataPath(file string) string {
@@ -819,7 +827,11 @@ func handleSummon(s *discordgo.Session, i *discordgo.InteractionCreate, opts []*
 }
 
 func handleVibeCheck(s *discordgo.Session, i *discordgo.InteractionCreate, opts []*discordgo.ApplicationCommandInteractionDataOption) {
-	target := i.Member.User
+	target := interactionUser(i)
+	if target == nil {
+		respondText(s, i, "Unable to identify user for vibe check.")
+		return
+	}
 	if u := optionUser(opts, "user"); u != nil {
 		target = u
 	}
@@ -830,7 +842,7 @@ func handleVibeCheck(s *discordgo.Session, i *discordgo.InteractionCreate, opts 
 	vibes := []string{"Immaculate", "Main Character", "Suspicious", "Chaotic Neutral", "Legendary", "Touch Grass"}
 	idx := int(seed % int64(len(vibes)))
 	pct := (idx + 1) * 100 / len(vibes)
-	respondText(s, i, fmt.Sprintf("%s vibe: %s (%d%%)", target.Username, vibes[idx], pct))
+	respondText(s, i, fmt.Sprintf("\U0001FAE8 %s vibe: %s (%d%%)", target.Username, vibes[idx], pct))
 }
 
 func handleWouldYouRather(s *discordgo.Session, i *discordgo.InteractionCreate) {
@@ -938,11 +950,11 @@ func handleMeme(s *discordgo.Session, i *discordgo.InteractionCreate) {
 	p := posts[rand.Intn(len(posts))]
 	embed := &discordgo.MessageEmbed{
 		Title:       p.Title,
-		Description: fmt.Sprintf("👍 %d upvotes | 💬 %d comments", p.Ups, p.NumComments),
+		Description: fmt.Sprintf("\U0001F44D %d upvotes | \U0001F4AC %d comments", p.Ups, p.NumComments),
 		Color:       0xEB459E,
 		URL:         "https://reddit.com" + p.Permalink,
 		Image:       &discordgo.MessageEmbedImage{URL: p.URL},
-		Footer:      &discordgo.MessageEmbedFooter{Text: "r/" + sub + " • Discorbo"},
+		Footer:      &discordgo.MessageEmbedFooter{Text: "r/" + sub + " ï¿½ Discorbo"},
 	}
 	respondEmbed(s, i, embed)
 }
@@ -1043,8 +1055,8 @@ func handleTrivia(s *discordgo.Session, i *discordgo.InteractionCreate, opts []*
 		}
 	}
 	embed := &discordgo.MessageEmbed{
-		Title:       "🧠 Trivia - " + q.Category,
-		Description: fmt.Sprintf("**%s**\n\nDifficulty: %s\nPoints: %d", html.UnescapeString(q.Question), strings.ToUpper(q.Difficulty), points),
+		Title:       "\U0001F9E0 Trivia - " + q.Category,
+		Description: fmt.Sprintf("**%s**\\n\\n\U0001F3AF Difficulty: %s\\n\U0001F4AF Points: %d", html.UnescapeString(q.Question), strings.ToUpper(q.Difficulty), points),
 		Color:       0xEB459E,
 	}
 	_ = s.InteractionRespond(i.Interaction, &discordgo.InteractionResponse{
@@ -1095,6 +1107,11 @@ func handleTriviaLeaderboard(s *discordgo.Session, i *discordgo.InteractionCreat
 }
 
 func handleBattle(s *discordgo.Session, i *discordgo.InteractionCreate, opts []*discordgo.ApplicationCommandInteractionDataOption) {
+	user := interactionUser(i)
+	if user == nil {
+		respondText(s, i, "Unable to identify user for battle.")
+		return
+	}
 	opponent := optionUser(opts, "opponent")
 	if opponent == nil {
 		respondText(s, i, "Opponent is required.")
@@ -1104,7 +1121,7 @@ func handleBattle(s *discordgo.Session, i *discordgo.InteractionCreate, opts []*
 		respondText(s, i, "You cannot battle bots.")
 		return
 	}
-	if opponent.ID == i.Member.User.ID {
+	if opponent.ID == user.ID {
 		respondText(s, i, "You cannot battle yourself.")
 		return
 	}
@@ -1113,7 +1130,7 @@ func handleBattle(s *discordgo.Session, i *discordgo.InteractionCreate, opts []*
 		Username string
 		HP       int
 	}
-	a := fighter{ID: i.Member.User.ID, Username: i.Member.User.Username, HP: 100}
+	a := fighter{ID: user.ID, Username: user.Username, HP: 100}
 	b := fighter{ID: opponent.ID, Username: opponent.Username, HP: 100}
 	turnA := true
 	logs := []string{}
@@ -1165,10 +1182,15 @@ func handleBattle(s *discordgo.Session, i *discordgo.InteractionCreate, opts []*
 	_ = writeData("battle-stats.json", stats)
 
 	last := strings.Join(logs[max(0, len(logs)-3):], "\n")
-	respondText(s, i, fmt.Sprintf("Winner: %s\nFinal HP: %d\n%s", winner.Username, winner.HP, last))
+	respondText(s, i, fmt.Sprintf("\u2694\uFE0F Winner: %s\n\u2764\uFE0F Final HP: %d\n%s", winner.Username, winner.HP, last))
 }
 
 func handleDaily(s *discordgo.Session, i *discordgo.InteractionCreate, opts []*discordgo.ApplicationCommandInteractionDataOption) {
+	user := interactionUser(i)
+	if user == nil {
+		respondText(s, i, "Unable to identify user for daily rewards.")
+		return
+	}
 	sub, subOpts := getSubcommand(opts)
 	if sub == "" {
 		sub = "claim"
@@ -1176,11 +1198,11 @@ func handleDaily(s *discordgo.Session, i *discordgo.InteractionCreate, opts []*d
 	_ = subOpts
 	all := map[string]dailyUser{}
 	_ = readData("daily-rewards.json", &all)
-	u := all[i.Member.User.ID]
+	u := all[user.ID]
 	if u.Username == "" {
-		u = dailyUser{Username: i.Member.User.Username}
+		u = dailyUser{Username: user.Username}
 	}
-	u.Username = i.Member.User.Username
+	u.Username = user.Username
 	now := time.Now().UnixMilli()
 	day := int64(24 * time.Hour / time.Millisecond)
 
@@ -1207,7 +1229,7 @@ func handleDaily(s *discordgo.Session, i *discordgo.InteractionCreate, opts []*d
 		u.Coins += reward
 		u.LastClaim = now
 		u.TotalClaims++
-		all[i.Member.User.ID] = u
+		all[user.ID] = u
 		_ = writeData("daily-rewards.json", all)
 		respondText(s, i, fmt.Sprintf("Claimed %d coins. Total: %d | Streak: %d", reward, u.Coins, u.Streak))
 	case "stats":
@@ -1247,6 +1269,11 @@ func handleDaily(s *discordgo.Session, i *discordgo.InteractionCreate, opts []*d
 }
 
 func handleBossRaid(s *discordgo.Session, i *discordgo.InteractionCreate, opts []*discordgo.ApplicationCommandInteractionDataOption) {
+	user := interactionUser(i)
+	if user == nil {
+		respondText(s, i, "Unable to identify user for boss raid.")
+		return
+	}
 	sub, _ := getSubcommand(opts)
 	if sub == "" {
 		sub = "status"
@@ -1288,10 +1315,10 @@ func handleBossRaid(s *discordgo.Session, i *discordgo.InteractionCreate, opts [
 			respondText(s, i, "No active boss to attack.")
 			return
 		}
-		p := g.Participants[i.Member.User.ID]
+		p := g.Participants[user.ID]
 		if p == nil {
-			p = &raidParticipant{Username: i.Member.User.Username}
-			g.Participants[i.Member.User.ID] = p
+			p = &raidParticipant{Username: user.Username}
+			g.Participants[user.ID] = p
 		}
 		now := time.Now().UnixMilli()
 		if now-p.LastAttack < int64(5*time.Minute/time.Millisecond) {
@@ -1311,7 +1338,7 @@ func handleBossRaid(s *discordgo.Session, i *discordgo.InteractionCreate, opts [
 		p.Damage += damage
 		p.Attacks++
 		p.LastAttack = now
-		p.Username = i.Member.User.Username
+		p.Username = user.Username
 		g.TotalDamage += damage
 		defeated := g.Boss.CurrentHP == 0
 		all[i.GuildID] = g
@@ -1332,7 +1359,7 @@ func handleBossRaid(s *discordgo.Session, i *discordgo.InteractionCreate, opts [
 			}
 			_ = writeData("daily-rewards.json", rewards)
 			loot := g.Boss.Loot[rand.Intn(len(g.Boss.Loot))]
-			respondText(s, i, fmt.Sprintf("%s defeated! Final blow by %s for %d damage%s\nLoot: %s", g.Boss.Name, i.Member.User.Username, damage, map[bool]string{true: " (CRIT)", false: ""}[crit], loot))
+			respondText(s, i, fmt.Sprintf("%s defeated! Final blow by %s for %d damage%s\nLoot: %s", g.Boss.Name, user.Username, damage, map[bool]string{true: " (CRIT)", false: ""}[crit], loot))
 			return
 		}
 		respondText(s, i, fmt.Sprintf("Dealt %d damage%s. %s HP: %d/%d", damage, map[bool]string{true: " (CRIT)", false: ""}[crit], g.Boss.Name, g.Boss.CurrentHP, g.Boss.MaxHP))
@@ -1365,6 +1392,11 @@ func handleBossRaid(s *discordgo.Session, i *discordgo.InteractionCreate, opts [
 }
 
 func handleQuote(s *discordgo.Session, i *discordgo.InteractionCreate, opts []*discordgo.ApplicationCommandInteractionDataOption) {
+	user := interactionUser(i)
+	if user == nil {
+		respondText(s, i, "Unable to identify user for quote command.")
+		return
+	}
 	sub, subOpts := getSubcommand(opts)
 	if sub == "" {
 		sub = "random"
@@ -1379,7 +1411,7 @@ func handleQuote(s *discordgo.Session, i *discordgo.InteractionCreate, opts []*d
 			respondText(s, i, "Quote text is required.")
 			return
 		}
-		author := i.Member.User
+		author := user
 		if au := optionUser(subOpts, "author"); au != nil {
 			author = au
 		}
@@ -1391,21 +1423,21 @@ func handleQuote(s *discordgo.Session, i *discordgo.InteractionCreate, opts []*d
 				Username: author.Username,
 				Avatar:   author.AvatarURL(""),
 			},
-			AddedBy:   quoteAdder{ID: i.Member.User.ID, Username: i.Member.User.Username},
+			AddedBy:   quoteAdder{ID: user.ID, Username: user.Username},
 			Timestamp: time.Now().UnixMilli(),
 			GuildID:   i.GuildID,
 		}
 		g.Quotes = append(g.Quotes, q)
 		all[i.GuildID] = g
 		_ = writeData("quotes.json", all)
-		respondText(s, i, fmt.Sprintf("Quote #%d added: \"%s\" — %s", q.ID, q.Text, q.Author.Username))
+		respondText(s, i, fmt.Sprintf("\U0001F4DD Quote #%d added: \"%s\" - %s", q.ID, q.Text, q.Author.Username))
 	case "random":
 		if len(g.Quotes) == 0 {
 			respondText(s, i, "No quotes yet. Use /quote add.")
 			return
 		}
 		q := g.Quotes[rand.Intn(len(g.Quotes))]
-		respondText(s, i, fmt.Sprintf("\"%s\"\n— %s (Quote #%d)", q.Text, q.Author.Username, q.ID))
+		respondText(s, i, fmt.Sprintf("\"%s\"\n- %s (Quote #%d)", q.Text, q.Author.Username, q.ID))
 	case "list":
 		if len(g.Quotes) == 0 {
 			respondText(s, i, "No quotes yet. Use /quote add.")
@@ -1418,7 +1450,7 @@ func handleQuote(s *discordgo.Session, i *discordgo.InteractionCreate, opts []*d
 			if len(preview) > 60 {
 				preview = preview[:60] + "..."
 			}
-			lines = append(lines, fmt.Sprintf("#%d \"%s\" — %s", q.ID, preview, q.Author.Username))
+			lines = append(lines, fmt.Sprintf("#%d \"%s\" - %s", q.ID, preview, q.Author.Username))
 		}
 		respondText(s, i, strings.Join(lines, "\n"))
 	case "remove":
@@ -1453,17 +1485,22 @@ func handleQuote(s *discordgo.Session, i *discordgo.InteractionCreate, opts []*d
 }
 
 func handleQuest(s *discordgo.Session, i *discordgo.InteractionCreate, opts []*discordgo.ApplicationCommandInteractionDataOption) {
+	user := interactionUser(i)
+	if user == nil {
+		respondText(s, i, "Unable to identify user for quests.")
+		return
+	}
 	sub, _ := getSubcommand(opts)
 	if sub == "" {
 		sub = "get"
 	}
 	all := map[string]questUser{}
 	_ = readData("quests.json", &all)
-	u := all[i.Member.User.ID]
+	u := all[user.ID]
 	if u.Username == "" {
-		u = questUser{Username: i.Member.User.Username}
+		u = questUser{Username: user.Username}
 	}
-	u.Username = i.Member.User.Username
+	u.Username = user.Username
 
 	switch sub {
 	case "get":
@@ -1474,7 +1511,7 @@ func handleQuest(s *discordgo.Session, i *discordgo.InteractionCreate, opts []*d
 		q := questTemplates[rand.Intn(len(questTemplates))]
 		q.AssignedAt = time.Now().UnixMilli()
 		u.CurrentQuest = &q
-		all[i.Member.User.ID] = u
+		all[user.ID] = u
 		_ = writeData("quests.json", all)
 		respondText(s, i, fmt.Sprintf("New quest: %s\nDifficulty: %s\nReward: %d XP", q.Task, q.Difficulty, q.XP))
 	case "complete":
@@ -1486,7 +1523,7 @@ func handleQuest(s *discordgo.Session, i *discordgo.InteractionCreate, opts []*d
 		u.TotalXP += q.XP
 		u.CompletedQuests++
 		u.CurrentQuest = nil
-		all[i.Member.User.ID] = u
+		all[user.ID] = u
 		_ = writeData("quests.json", all)
 		level := (u.TotalXP / 100) + 1
 		respondText(s, i, fmt.Sprintf("Quest completed: %s\n+%d XP\nLevel: %d", q.Task, q.XP, level))
@@ -1527,20 +1564,25 @@ func handleQuest(s *discordgo.Session, i *discordgo.InteractionCreate, opts []*d
 }
 
 func handleLoot(s *discordgo.Session, i *discordgo.InteractionCreate, opts []*discordgo.ApplicationCommandInteractionDataOption) {
+	user := interactionUser(i)
+	if user == nil {
+		respondText(s, i, "Unable to identify user for loot.")
+		return
+	}
 	sub, _ := getSubcommand(opts)
 	if sub == "" {
 		sub = "open"
 	}
 	all := map[string]lootUser{}
 	_ = readData("loot.json", &all)
-	u := all[i.Member.User.ID]
+	u := all[user.ID]
 	if u.Username == "" {
 		u = lootUser{
-			Username:  i.Member.User.Username,
+			Username:  user.Username,
 			Inventory: []lootItem{},
 		}
 	}
-	u.Username = i.Member.User.Username
+	u.Username = user.Username
 
 	chooseRarity := func() string {
 		r := rand.Float64() * 100
@@ -1585,7 +1627,7 @@ func handleLoot(s *discordgo.Session, i *discordgo.InteractionCreate, opts []*di
 			u.Stats.Cursed++
 		}
 		u.TotalLoots++
-		all[i.Member.User.ID] = u
+		all[user.ID] = u
 		_ = writeData("loot.json", all)
 		respondText(s, i, fmt.Sprintf("Loot opened:\n%s %s\n%s\nTotal loot: %d", table.Emoji, table.Name, item, u.TotalLoots))
 	case "inventory":
@@ -1610,6 +1652,11 @@ func handleLoot(s *discordgo.Session, i *discordgo.InteractionCreate, opts []*di
 }
 
 func handleMazeStart(s *discordgo.Session, i *discordgo.InteractionCreate) {
+	user := interactionUser(i)
+	if user == nil {
+		respondText(s, i, "Unable to identify user for maze.")
+		return
+	}
 	levelIndex := int64(0)
 	for _, o := range i.ApplicationCommandData().Options {
 		if o.Name == "level" {
@@ -1622,7 +1669,7 @@ func handleMazeStart(s *discordgo.Session, i *discordgo.InteractionCreate) {
 	level := levels[levelIndex]
 
 	state := gameState{
-		UserID:    i.Member.User.ID,
+		UserID:    user.ID,
 		Level:     int(levelIndex),
 		PlayerX:   level.StartX,
 		PlayerY:   level.StartY,
@@ -1659,7 +1706,7 @@ func handleMazeStart(s *discordgo.Session, i *discordgo.InteractionCreate) {
 		State:     state,
 		ChannelID: msg.ChannelID,
 		MessageID: msg.ID,
-		UserID:    i.Member.User.ID,
+		UserID:    user.ID,
 		Level:     level,
 	}
 	sessionMu.Unlock()
@@ -1691,6 +1738,11 @@ func handleMazeStart(s *discordgo.Session, i *discordgo.InteractionCreate) {
 }
 
 func handleComponent(s *discordgo.Session, i *discordgo.InteractionCreate) {
+	user := interactionUser(i)
+	if user == nil {
+		_ = s.InteractionRespond(i.Interaction, &discordgo.InteractionResponse{Type: discordgo.InteractionResponseDeferredMessageUpdate})
+		return
+	}
 	data := i.MessageComponentData()
 	if strings.HasPrefix(data.CustomID, "trivia_") {
 		handleTriviaComponent(s, i)
@@ -1707,7 +1759,7 @@ func handleComponent(s *discordgo.Session, i *discordgo.InteractionCreate) {
 		_ = s.InteractionRespond(i.Interaction, &discordgo.InteractionResponse{Type: discordgo.InteractionResponseDeferredMessageUpdate})
 		return
 	}
-	if sess.UserID != i.Member.User.ID {
+	if sess.UserID != user.ID {
 		sessionMu.Unlock()
 		_ = s.InteractionRespond(i.Interaction, &discordgo.InteractionResponse{Type: discordgo.InteractionResponseChannelMessageWithSource, Data: &discordgo.InteractionResponseData{Content: "Only the starter can control this maze.", Flags: discordgo.MessageFlagsEphemeral}})
 		return
@@ -1723,7 +1775,7 @@ func handleComponent(s *discordgo.Session, i *discordgo.InteractionCreate) {
 
 	if sess.State.Won {
 		completionTime := int((time.Now().UnixMilli() - sess.State.StartTime) / 1000)
-		saveMazeCompletion(i.Member.User.ID, i.Member.User.Username, sess.State.Level, completionTime, sess.State.Coins)
+		saveMazeCompletion(user.ID, user.Username, sess.State.Level, completionTime, sess.State.Coins)
 	}
 
 	gameOver := sess.State.GameOver
@@ -1957,7 +2009,11 @@ func toBoard(rows []string) [][]string {
 func buildMazeEmbed(state gameState, level levelDef, timeout bool) *discordgo.MessageEmbed {
 	lines := make([]string, 0, len(state.Board))
 	for _, row := range state.Board {
-		lines = append(lines, strings.Join(row, ""))
+		cells := make([]string, 0, len(row))
+		for _, cell := range row {
+			cells = append(cells, mazeCellEmoji(cell))
+		}
+		lines = append(lines, strings.Join(cells, ""))
 	}
 	board := strings.Join(lines, "\n")
 	elapsed := int((time.Now().UnixMilli() - state.StartTime) / 1000)
@@ -1966,24 +2022,24 @@ func buildMazeEmbed(state gameState, level levelDef, timeout bool) *discordgo.Me
 		timeLeft = 0
 	}
 
-	title := fmt.Sprintf("Maze: %s (%s)", level.Name, level.Difficulty)
+	title := fmt.Sprintf("\U0001F9E9 Maze: %s (%s)", level.Name, level.Difficulty)
 	color := 0xEB459E
 	result := ""
 	if state.GameOver {
 		if state.Won {
-			title = "Maze: Victory"
+			title = "\U0001F3C6 Maze: Victory"
 			color = 0x57F287
-			result = "You escaped the maze."
+			result = "\U0001F973 You escaped the maze."
 		}
 		if timeout {
-			title = "Maze: Time Up"
+			title = "\u23F0 Maze: Time Up"
 			color = 0xFEE75C
-			result = "Time ran out."
+			result = "\u23F1\uFE0F Time ran out."
 		}
 		if !state.Won && !timeout {
-			title = "Maze: Game Over"
+			title = "\u2620\uFE0F Maze: Game Over"
 			color = 0xED4245
-			result = "You lost all lives."
+			result = "\U0001F494 You lost all lives."
 		}
 	}
 
@@ -1991,18 +2047,39 @@ func buildMazeEmbed(state gameState, level levelDef, timeout bool) *discordgo.Me
 	if result != "" {
 		desc += result + "\n\n"
 	}
-	desc += fmt.Sprintf("Lives: %d/3\nCoins: %d\nTime: %ds\nMoves: %d\n\nKey: P=You, .=Path, #=Wall, G=Goal, C=Coin, S=Spike, E=Enemy", state.Lives, state.Coins, timeLeft, state.Moves)
+	desc += fmt.Sprintf("\u2764\uFE0F Lives: %d/3\n\U0001FA99 Coins: %d\n\u23F3 Time: %ds\n\U0001F3C3 Moves: %d\n\nKey: \U0001F7E6=You, \u2B1C=Path, \U0001F7EB=Wall, \U0001F3C1=Goal, \U0001FA99=Coin, \U0001F525=Spike, \U0001F47E=Enemy", state.Lives, state.Coins, timeLeft, state.Moves)
 
 	return &discordgo.MessageEmbed{Title: title, Description: desc, Color: color}
 }
 
+func mazeCellEmoji(cell string) string {
+	switch cell {
+	case "P":
+		return "\U0001F7E6"
+	case ".":
+		return "\u2B1C"
+	case "#":
+		return "\U0001F7EB"
+	case "G":
+		return "\U0001F3C1"
+	case "C":
+		return "\U0001FA99"
+	case "S":
+		return "\U0001F525"
+	case "E":
+		return "\U0001F47E"
+	default:
+		return cell
+	}
+}
+
 func mazeComponents() []discordgo.MessageComponent {
 	return []discordgo.MessageComponent{
-		discordgo.ActionsRow{Components: []discordgo.MessageComponent{discordgo.Button{Label: "Up", Style: discordgo.PrimaryButton, CustomID: "maze_up"}}},
+		discordgo.ActionsRow{Components: []discordgo.MessageComponent{discordgo.Button{Label: "\u2B06\uFE0F Up", Style: discordgo.PrimaryButton, CustomID: "maze_up"}}},
 		discordgo.ActionsRow{Components: []discordgo.MessageComponent{
-			discordgo.Button{Label: "Left", Style: discordgo.PrimaryButton, CustomID: "maze_left"},
-			discordgo.Button{Label: "Down", Style: discordgo.PrimaryButton, CustomID: "maze_down"},
-			discordgo.Button{Label: "Right", Style: discordgo.PrimaryButton, CustomID: "maze_right"},
+			discordgo.Button{Label: "\u2B05\uFE0F Left", Style: discordgo.PrimaryButton, CustomID: "maze_left"},
+			discordgo.Button{Label: "\u2B07\uFE0F Down", Style: discordgo.PrimaryButton, CustomID: "maze_down"},
+			discordgo.Button{Label: "\u27A1\uFE0F Right", Style: discordgo.PrimaryButton, CustomID: "maze_right"},
 		}},
 	}
 }

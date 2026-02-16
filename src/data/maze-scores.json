@@ -7,8 +7,14 @@
         "time": 25,
         "coins": 1,
         "timestamp": 1771274224552
+      },
+      {
+        "level": 0,
+        "time": 20,
+        "coins": 1,
+        "timestamp": 1771275405041
       }
     ],
-    "totalCoins": 1
+    "totalCoins": 2
   }
 }
