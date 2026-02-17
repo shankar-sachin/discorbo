@@ -1,11 +1,14 @@
 package main
 
 import (
+	"bytes"
+	"encoding/json"
 	"errors"
 	"fmt"
 	"io"
 	"math/rand"
 	"net/http"
+	"os"
 	"strconv"
 	"strings"
 	"time"
@@ -14,11 +17,23 @@ import (
 	"github.com/bwmarrin/discordgo"
 )
 
+// Embed color constants
+const (
+	ColorPurple = 0xEB459E // Fun/primary color
+	ColorBlue   = 0x5865F2 // Info/utility
+	ColorGreen  = 0x57F287 // Success
+	ColorYellow = 0xFEE75C // Warning
+	ColorRed    = 0xED4245 // Error
+	ColorGray   = 0x99AAB5 // Neutral
+)
+
 // Discord interaction helpers
 func respondText(s *discordgo.Session, i *discordgo.InteractionCreate, text string) {
+	// Convert to info embed for consistency
+	embed := createInfoEmbed("", text)
 	_ = s.InteractionRespond(i.Interaction, &discordgo.InteractionResponse{
 		Type: discordgo.InteractionResponseChannelMessageWithSource,
-		Data: &discordgo.InteractionResponseData{Content: text},
+		Data: &discordgo.InteractionResponseData{Embeds: []*discordgo.MessageEmbed{embed}},
 	})
 }
 
@@ -27,6 +42,60 @@ func respondEmbed(s *discordgo.Session, i *discordgo.InteractionCreate, e *disco
 		Type: discordgo.InteractionResponseChannelMessageWithSource,
 		Data: &discordgo.InteractionResponseData{Embeds: []*discordgo.MessageEmbed{e}},
 	})
+}
+
+// Enhanced embed creators
+func createSuccessEmbed(title, description string) *discordgo.MessageEmbed {
+	return &discordgo.MessageEmbed{
+		Title:       "✅ " + title,
+		Description: description,
+		Color:       ColorGreen,
+		Timestamp:   time.Now().Format(time.RFC3339),
+		Footer:      &discordgo.MessageEmbedFooter{Text: "Discorbo"},
+	}
+}
+
+func createInfoEmbed(title, description string) *discordgo.MessageEmbed {
+	embed := &discordgo.MessageEmbed{
+		Description: description,
+		Color:       ColorBlue,
+		Timestamp:   time.Now().Format(time.RFC3339),
+		Footer:      &discordgo.MessageEmbedFooter{Text: "Discorbo"},
+	}
+	if title != "" {
+		embed.Title = title
+	}
+	return embed
+}
+
+func createErrorEmbed(title, description string) *discordgo.MessageEmbed {
+	return &discordgo.MessageEmbed{
+		Title:       "❌ " + title,
+		Description: description,
+		Color:       ColorRed,
+		Timestamp:   time.Now().Format(time.RFC3339),
+		Footer:      &discordgo.MessageEmbedFooter{Text: "Discorbo"},
+	}
+}
+
+func createWarningEmbed(title, description string) *discordgo.MessageEmbed {
+	return &discordgo.MessageEmbed{
+		Title:       "⚠️ " + title,
+		Description: description,
+		Color:       ColorYellow,
+		Timestamp:   time.Now().Format(time.RFC3339),
+		Footer:      &discordgo.MessageEmbedFooter{Text: "Discorbo"},
+	}
+}
+
+func createFunEmbed(title, description string) *discordgo.MessageEmbed {
+	return &discordgo.MessageEmbed{
+		Title:       title,
+		Description: description,
+		Color:       ColorPurple,
+		Timestamp:   time.Now().Format(time.RFC3339),
+		Footer:      &discordgo.MessageEmbedFooter{Text: "Discorbo"},
+	}
 }
 
 func deferReply(s *discordgo.Session, i *discordgo.InteractionCreate) {
@@ -165,11 +234,13 @@ func htmlUnescapeSlice(in []string) []string {
 func handleRoll(s *discordgo.Session, i *discordgo.InteractionCreate, expr string) {
 	count, sides, mod, ok := parseDice(expr)
 	if !ok {
-		respondText(s, i, "Invalid dice notation. Example: d20, 3d6, 2d10+5")
+		embed := createErrorEmbed("Invalid Dice Notation", "Use format like: d20, 3d6, 2d10+5")
+		respondEmbed(s, i, embed)
 		return
 	}
 	if count > 20 || sides < 2 || sides > 1000 {
-		respondText(s, i, "Dice limits: up to 20 dice, and 2-1000 sides.")
+		embed := createErrorEmbed("Invalid Dice Parameters", "Limits: up to 20 dice, 2-1000 sides per die")
+		respondEmbed(s, i, embed)
 		return
 	}
 	rolls := make([]int, 0, count)
@@ -180,7 +251,17 @@ func handleRoll(s *discordgo.Session, i *discordgo.InteractionCreate, expr strin
 		total += r
 	}
 	final := total + mod
-	respondText(s, i, fmt.Sprintf("Roll %s\nRolls: %v\nTotal: %d", expr, rolls, final))
+	rollsStr := make([]string, len(rolls))
+	for i, r := range rolls {
+		rollsStr[i] = fmt.Sprintf("%d", r)
+	}
+	desc := fmt.Sprintf("**Rolls:** [%s]", strings.Join(rollsStr, ", "))
+	if mod != 0 {
+		desc += fmt.Sprintf("\n**Modifier:** %+d", mod)
+	}
+	desc += fmt.Sprintf("\n**Total:** %d", final)
+	embed := createFunEmbed(fmt.Sprintf("🎲 Rolling %s", expr), desc)
+	respondEmbed(s, i, embed)
 }
 
 func parseDice(expr string) (int, int, int, bool) {
@@ -480,6 +561,49 @@ var raidBosses = []raidBoss{
 	{Name: "The Lag Monster", Emoji: "\U0001F47E", MaxHP: 5000, Description: "A creature that feeds on your WiFi", Loot: []string{"Router of Legends", "Ping Reducer", "5G Crystal"}},
 	{Name: "The Monday Overlord", Emoji: "\U0001F4C5", MaxHP: 7000, Description: "The most feared entity", Loot: []string{"Weekend Extension", "Coffee of Awakening", "Skip Monday Pass"}},
 	{Name: "Social Anxiety Dragon", Emoji: "\U0001F409", MaxHP: 5500, Description: "Guards social skills treasure", Loot: []string{"Conversation Starter Kit", "Confidence Amulet", "Small Talk Guide"}},
+}
+
+// AI Chat helper
+func getAIChatResponse(userID, username, message string, isDM bool) (string, error) {
+	aiServiceURL := os.Getenv("AI_CHAT_URL")
+	if aiServiceURL == "" {
+		aiServiceURL = "http://localhost:5000"
+	}
+
+	requestBody, _ := json.Marshal(map[string]interface{}{
+		"user_id":  userID,
+		"username": username,
+		"message":  message,
+		"is_dm":    isDM,
+	})
+
+	resp, err := http.Post(aiServiceURL+"/chat", "application/json", bytes.NewBuffer(requestBody))
+	if err != nil {
+		return "", err
+	}
+	defer resp.Body.Close()
+
+	if resp.StatusCode != 200 {
+		// Try to get fallback message
+		var errorResp map[string]interface{}
+		if err := json.NewDecoder(resp.Body).Decode(&errorResp); err == nil {
+			if fallback, ok := errorResp["fallback"].(string); ok {
+				return fallback, nil
+			}
+		}
+		return "", fmt.Errorf("AI service returned status %d", resp.StatusCode)
+	}
+
+	var result map[string]interface{}
+	if err := json.NewDecoder(resp.Body).Decode(&result); err != nil {
+		return "", err
+	}
+
+	if response, ok := result["response"].(string); ok {
+		return response, nil
+	}
+
+	return "", fmt.Errorf("invalid response format")
 }
 
 var lootTables = map[string]lootTable{

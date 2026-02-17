@@ -2,6 +2,7 @@ package main
 
 import (
 	"fmt"
+	"log"
 	"strconv"
 	"strings"
 	"time"
@@ -140,6 +141,23 @@ func handleMessageCreate(s *discordgo.Session, m *discordgo.MessageCreate) {
 	if m == nil || m.Author == nil || m.Author.Bot {
 		return
 	}
+
+	// Check for DMs or bot mentions and handle with AI
+	isDM := m.GuildID == ""
+	isMention := false
+	for _, user := range m.Mentions {
+		if user.ID == s.State.User.ID {
+			isMention = true
+			break
+		}
+	}
+
+	if isDM || isMention {
+		handleAIChat(s, m, isDM)
+		return
+	}
+
+	// Handle AFK system
 	afkMap := map[string]afkStatus{}
 	if err := readData("afk-users.json", &afkMap); err != nil {
 		return
@@ -162,4 +180,38 @@ func handleMessageCreate(s *discordgo.Session, m *discordgo.MessageCreate) {
 	if changed {
 		_ = writeData("afk-users.json", afkMap)
 	}
+}
+
+func handleAIChat(s *discordgo.Session, m *discordgo.MessageCreate, isDM bool) {
+	// Show typing indicator
+	_ = s.ChannelTyping(m.ChannelID)
+
+	// Remove bot mention from message if present
+	cleanMessage := m.Content
+	for _, user := range m.Mentions {
+		if user.ID == s.State.User.ID {
+			cleanMessage = strings.Replace(cleanMessage, "<@"+user.ID+">", "", -1)
+			cleanMessage = strings.Replace(cleanMessage, "<@!"+user.ID+">", "", -1)
+		}
+	}
+	cleanMessage = strings.TrimSpace(cleanMessage)
+
+	if cleanMessage == "" {
+		embed := createInfoEmbed("👋 Hello!", "I'm Discorbo! How can I help you?\n\nTry asking me a question or use `/help` to see my commands!")
+		_, _ = s.ChannelMessageSendEmbed(m.ChannelID, embed)
+		return
+	}
+
+	// Get AI response
+	response, err := getAIChatResponse(m.Author.ID, m.Author.Username, cleanMessage, isDM)
+	if err != nil {
+		log.Printf("AI chat error: %v", err)
+		embed := createErrorEmbed("Oops!", "I'm having trouble thinking right now. Try using `/help` to see my commands!")
+		_, _ = s.ChannelMessageSendEmbed(m.ChannelID, embed)
+		return
+	}
+
+	// Send response as embed
+	embed := createInfoEmbed("🤖 Discorbo", response)
+	_, _ = s.ChannelMessageSendEmbed(m.ChannelID, embed)
 }

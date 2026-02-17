@@ -13,7 +13,8 @@
       "Bash(curl:*)",
       "Bash(go build:*)",
       "Bash(go mod tidy:*)",
-      "Bash(npm run build:go:*)"
+      "Bash(npm run build:go:*)",
+      "Bash(pip install:*)"
     ]
   }
 }

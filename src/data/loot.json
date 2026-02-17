@@ -1,0 +1,22 @@
+{
+  "1070486338643706017": {
+    "username": "sachinshankar",
+    "inventory": [
+      {
+        "item": "Bottle Cap",
+        "rarity": "common",
+        "obtainedAt": 1771292469852
+      }
+    ],
+    "stats": {
+      "common": 1,
+      "uncommon": 0,
+      "rare": 0,
+      "epic": 0,
+      "legendary": 0,
+      "cosmic": 0,
+      "cursed": 0
+    },
+    "totalLoots": 1
+  }
+}

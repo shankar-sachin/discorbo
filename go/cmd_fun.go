@@ -20,11 +20,12 @@ func handleSimpleFun(s *discordgo.Session, i *discordgo.InteractionCreate) {
 
 	switch cmd {
 	case "coinflip":
-		if rand.Intn(2) == 0 {
-			respondText(s, i, "\U0001FA99 Heads")
-		} else {
-			respondText(s, i, "\U0001FA99 Tails")
+		result := "Heads"
+		if rand.Intn(2) != 0 {
+			result = "Tails"
 		}
+		embed := createFunEmbed("🪙 Coin Flip", fmt.Sprintf("**Result:** %s", result))
+		respondEmbed(s, i, embed)
 	case "dice":
 		sides := int64(6)
 		count := int64(1)
@@ -52,11 +53,15 @@ func handleSimpleFun(s *discordgo.Session, i *discordgo.InteractionCreate) {
 			total += r
 			rolls = append(rolls, strconv.Itoa(r))
 		}
-		respondText(s, i, fmt.Sprintf("\U0001F3B2 Rolled %dd%d: [%s]\n\U0001F4CA Total: %d", count, sides, strings.Join(rolls, ", "), total))
+		desc := fmt.Sprintf("**Rolls:** [%s]\n**Total:** %d", strings.Join(rolls, ", "), total)
+		embed := createFunEmbed(fmt.Sprintf("🎲 Rolled %dd%d", count, sides), desc)
+		respondEmbed(s, i, embed)
 	case "8ball":
 		answers := []string{"Yes", "No", "Maybe", "Definitely", "Unclear", "Ask later"}
 		question := optionString(opts, "question", "")
-		respondText(s, i, fmt.Sprintf("\U0001F52E Question: %s\n\U0001F3B1 Answer: %s", question, answers[rand.Intn(len(answers))]))
+		answer := answers[rand.Intn(len(answers))]
+		embed := createFunEmbed("🔮 Magic 8-Ball", fmt.Sprintf("**Question:** %s\n**Answer:** %s", question, answer))
+		respondEmbed(s, i, embed)
 	case "random-number":
 		min := int64(1)
 		max := int64(100)
@@ -71,11 +76,14 @@ func handleSimpleFun(s *discordgo.Session, i *discordgo.InteractionCreate) {
 		if max < min {
 			min, max = max, min
 		}
+		var result int64
 		if max == min {
-			respondText(s, i, fmt.Sprintf("%d", min))
+			result = min
 		} else {
-			respondText(s, i, fmt.Sprintf("%d", rand.Int63n(max-min+1)+min))
+			result = rand.Int63n(max-min+1) + min
 		}
+		embed := createFunEmbed("🔢 Random Number", fmt.Sprintf("**Range:** %d - %d\n**Result:** %d", min, max, result))
+		respondEmbed(s, i, embed)
 	case "random-choice":
 		raw := optionString(opts, "options", "")
 		items := []string{}
@@ -86,27 +94,44 @@ func handleSimpleFun(s *discordgo.Session, i *discordgo.InteractionCreate) {
 			}
 		}
 		if len(items) == 0 {
-			respondText(s, i, "No options provided.")
+			embed := createErrorEmbed("Error", "No options provided.")
+			respondEmbed(s, i, embed)
 		} else {
-			respondText(s, i, fmt.Sprintf("Picked: %s", items[rand.Intn(len(items))]))
+			choice := items[rand.Intn(len(items))]
+			embed := createFunEmbed("🎯 Random Choice", fmt.Sprintf("**Options:** %s\n**Picked:** %s", strings.Join(items, ", "), choice))
+			respondEmbed(s, i, embed)
 		}
 	case "rate":
 		thing := optionString(opts, "thing", "that")
-		respondText(s, i, fmt.Sprintf("I rate %s %d/10", thing, rand.Intn(10)+1))
+		rating := rand.Intn(10) + 1
+		embed := createFunEmbed("⭐ Rating", fmt.Sprintf("I rate **%s** %d/10", thing, rating))
+		respondEmbed(s, i, embed)
 	case "reverse-text":
 		src := optionString(opts, "text", "")
-		respondText(s, i, reverse(src))
+		embed := createFunEmbed("🔄 Reversed Text", reverse(src))
+		respondEmbed(s, i, embed)
 	case "mock-text":
 		src := optionString(opts, "text", "")
-		respondText(s, i, mockCase(src))
+		embed := createFunEmbed("🙃 Mocking Text", mockCase(src))
+		respondEmbed(s, i, embed)
 	case "flip-text":
 		src := optionString(opts, "text", "")
-		respondText(s, i, reverse(src))
+		embed := createFunEmbed("↕️ Flipped Text", reverse(src))
+		respondEmbed(s, i, embed)
 	case "rps":
 		user := strings.ToLower(optionString(opts, "choice", "rock"))
 		picks := []string{"rock", "paper", "scissors"}
 		bot := picks[rand.Intn(3)]
-		respondText(s, i, fmt.Sprintf("You: %s | Me: %s", user, bot))
+		var result string
+		if user == bot {
+			result = "🤝 Tie!"
+		} else if (user == "rock" && bot == "scissors") || (user == "paper" && bot == "rock") || (user == "scissors" && bot == "paper") {
+			result = "🎉 You Win!"
+		} else {
+			result = "😔 I Win!"
+		}
+		embed := createFunEmbed("✊✋✌️ Rock Paper Scissors", fmt.Sprintf("**You:** %s\n**Me:** %s\n\n%s", user, bot, result))
+		respondEmbed(s, i, embed)
 	case "roll":
 		expr := optionString(opts, "dice", "1d20")
 		handleRoll(s, i, expr)
@@ -123,7 +148,8 @@ func handleInteractiveFun(s *discordgo.Session, i *discordgo.InteractionCreate) 
 		u1 := optionUser(opts, "user1")
 		u2 := optionUser(opts, "user2")
 		if u1 == nil || u2 == nil {
-			respondText(s, i, "Both users are required.")
+			embed := createErrorEmbed("Error", "Both users are required.")
+			respondEmbed(s, i, embed)
 			return
 		}
 		combined := u1.ID + u2.ID
@@ -136,23 +162,35 @@ func handleInteractiveFun(s *discordgo.Session, i *discordgo.InteractionCreate) 
 			comp = -comp
 		}
 		comp = comp % 101
-		respondText(s, i, fmt.Sprintf("%s + %s = %d%% compatibility", u1.Username, u2.Username, comp))
+		hearts := "💔"
+		if comp > 75 {
+			hearts = "💖💖💖"
+		} else if comp > 50 {
+			hearts = "💕💕"
+		} else if comp > 25 {
+			hearts = "💕"
+		}
+		embed := createFunEmbed("💘 Love Calculator", fmt.Sprintf("**%s** + **%s**\n\n%s **%d%%** compatibility %s", u1.Username, u2.Username, hearts, comp, hearts))
+		respondEmbed(s, i, embed)
 	case "summon":
 		u := optionUser(opts, "user")
 		if u == nil {
-			respondText(s, i, "User is required.")
+			embed := createErrorEmbed("Error", "User is required.")
+			respondEmbed(s, i, embed)
 			return
 		}
 		reason := optionString(opts, "reason", "")
 		msg := fmt.Sprintf(summonMessages[rand.Intn(len(summonMessages))], "<@"+u.ID+">")
 		if reason != "" {
-			msg += "\nReason: " + reason
+			msg += "\n\n**Reason:** " + reason
 		}
-		respondText(s, i, msg)
+		embed := createFunEmbed("✨ Summoning Ritual", msg)
+		respondEmbed(s, i, embed)
 	case "vibecheck":
 		target := interactionUser(i)
 		if target == nil {
-			respondText(s, i, "Unable to identify user for vibe check.")
+			embed := createErrorEmbed("Error", "Unable to identify user for vibe check.")
+			respondEmbed(s, i, embed)
 			return
 		}
 		if u := optionUser(opts, "user"); u != nil {
@@ -165,14 +203,17 @@ func handleInteractiveFun(s *discordgo.Session, i *discordgo.InteractionCreate) 
 		vibes := []string{"Immaculate", "Main Character", "Suspicious", "Chaotic Neutral", "Legendary", "Touch Grass"}
 		idx := int(seed % int64(len(vibes)))
 		pct := (idx + 1) * 100 / len(vibes)
-		respondText(s, i, fmt.Sprintf("\U0001FAE8 %s vibe: %s (%d%%)", target.Username, vibes[idx], pct))
+		embed := createFunEmbed("🫨 Vibe Check", fmt.Sprintf("**%s's vibe:** %s (%d%%)", target.Username, vibes[idx], pct))
+		respondEmbed(s, i, embed)
 	case "would-you-rather":
 		q := wyrQuestions[rand.Intn(len(wyrQuestions))]
-		respondText(s, i, fmt.Sprintf("Would you rather:\n1) %s\n2) %s", q[0], q[1]))
+		embed := createFunEmbed("🤔 Would You Rather", fmt.Sprintf("**Option 1:** %s\n\n**Option 2:** %s", q[0], q[1]))
+		respondEmbed(s, i, embed)
 	case "hotseat":
 		members, err := s.GuildMembers(i.GuildID, "", 1000)
 		if err != nil || len(members) == 0 {
-			respondText(s, i, "Failed to fetch server members.")
+			embed := createErrorEmbed("Error", "Failed to fetch server members.")
+			respondEmbed(s, i, embed)
 			return
 		}
 		candidates := make([]*discordgo.Member, 0, len(members))
@@ -182,12 +223,14 @@ func handleInteractiveFun(s *discordgo.Session, i *discordgo.InteractionCreate) 
 			}
 		}
 		if len(candidates) == 0 {
-			respondText(s, i, "No human members found.")
+			embed := createErrorEmbed("Error", "No human members found.")
+			respondEmbed(s, i, embed)
 			return
 		}
 		m := candidates[rand.Intn(len(candidates))]
 		q := hotseatQuestions[rand.Intn(len(hotseatQuestions))]
-		respondText(s, i, fmt.Sprintf("<@%s> hotseat question:\n%s", m.User.ID, q))
+		embed := createFunEmbed("🔥 Hotseat", fmt.Sprintf("<@%s>\n\n**Question:** %s", m.User.ID, q))
+		respondEmbed(s, i, embed)
 	}
 }
 

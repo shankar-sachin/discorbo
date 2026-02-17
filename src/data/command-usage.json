@@ -2,7 +2,7 @@
   "1070486338643706017": {
     "trivia": 9,
     "trivia-leaderboard": 1,
-    "help": 3,
+    "help": 5,
     "bossraid": 14,
     "vibecheck": 1,
     "userinfo": 1,
@@ -15,6 +15,15 @@
     "maze-leaderboard": 3,
     "quote": 3,
     "battle": 5,
-    "meme": 1
+    "meme": 1,
+    "coinflip": 1,
+    "channel-info": 1,
+    "joke": 3,
+    "hotseat": 1,
+    "flip-text": 1,
+    "would-you-rather": 1,
+    "quest": 2,
+    "ping": 1,
+    "loot": 1
   }
 }

@@ -5,9 +5,10 @@
   "main": "src/index.js",
   "scripts": {
     "build": "npm run build:go",
-    "start": "powershell -ExecutionPolicy Bypass -File go/run.ps1",
+    "start": "powershell -ExecutionPolicy Bypass -File start_all.ps1",
+    "start:bot": "powershell -ExecutionPolicy Bypass -File go/run.ps1",
+    "start:ai": "python ai_chat.py",
     "start:js": "node src/index.js",
-    "start:go": "powershell -ExecutionPolicy Bypass -File go/run.ps1",
     "deploy": "node src/deploy-commands.js",
     "dev": "nodemon src/index.js",
     "build:go": "powershell -ExecutionPolicy Bypass -File go/build.ps1"
