@@ -6,17 +6,47 @@
         "item": "Bottle Cap",
         "rarity": "common",
         "obtainedAt": 1771292469852
+      },
+      {
+        "item": "Full Night's Sleep",
+        "rarity": "rare",
+        "obtainedAt": 1771476506655
+      },
+      {
+        "item": "Working Charger",
+        "rarity": "uncommon",
+        "obtainedAt": 1771476515316
+      },
+      {
+        "item": "Broken Pencil",
+        "rarity": "common",
+        "obtainedAt": 1771476524882
+      },
+      {
+        "item": "Good Vibes",
+        "rarity": "uncommon",
+        "obtainedAt": 1771476524887
+      },
+      {
+        "item": "Old Receipt",
+        "rarity": "common",
+        "obtainedAt": 1771476527103
+      },
+      {
+        "item": "Inbox Zero Achievement",
+        "rarity": "epic",
+        "obtainedAt": 1771476529362
       }
     ],
     "stats": {
-      "common": 1,
-      "uncommon": 0,
-      "rare": 0,
-      "epic": 0,
+      "common": 3,
+      "uncommon": 2,
+      "rare": 1,
+      "epic": 1,
       "legendary": 0,
       "cosmic": 0,
       "cursed": 0
     },
-    "totalLoots": 1
+    "totalLoots": 7
   }
 }

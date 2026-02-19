@@ -54,6 +54,27 @@ func handleToolUtility(s *discordgo.Session, i *discordgo.InteractionCreate) {
 		handlePoll(s, i, opts)
 	case "timer":
 		handleTimer(s, i, opts)
+	case "convert":
+		handleConvert(s, i, opts)
+	}
+}
+
+// Economy utility commands
+func handleEconomyUtility(s *discordgo.Session, i *discordgo.InteractionCreate) {
+	cmd := i.ApplicationCommandData().Name
+	opts := i.ApplicationCommandData().Options
+
+	switch cmd {
+	case "shop":
+		handleShop(s, i, opts)
+	case "inventory":
+		handleInventory(s, i, opts)
+	case "balance":
+		handleBalance(s, i)
+	case "trade":
+		handleTrade(s, i, opts)
+	case "economy-admin":
+		handleEconomyAdmin(s, i, opts)
 	}
 }
 
@@ -337,10 +358,11 @@ func handleCalc(s *discordgo.Session, i *discordgo.InteractionCreate, opts []*di
 	expr := optionString(opts, "expression", "")
 	result, err := evalMath(expr)
 	if err != nil {
-		respondText(s, i, "Invalid expression. Example: `5*5+10` or `sqrt`-style functions are not supported in Go mode.")
+		respondText(s, i, fmt.Sprintf("Invalid expression: %v\n\nSupported:\n• Basic: +, -, *, /, ^, %%\n• Functions: sqrt, sin, cos, tan, log, ln, abs, etc.\n• Constants: pi, e, tau, phi\n• Scientific: 1e6, 2.5e-3", err))
 		return
 	}
-	respondText(s, i, fmt.Sprintf("Expression: `%s`\nResult: `%s`", expr, result))
+	embed := createSuccessEmbed("Calculator", fmt.Sprintf("**Expression:** `%s`\n**Result:** `%s`", expr, result))
+	respondEmbed(s, i, embed)
 }
 
 func handleTranslate(s *discordgo.Session, i *discordgo.InteractionCreate, opts []*discordgo.ApplicationCommandInteractionDataOption) {
@@ -564,6 +586,88 @@ func handleAFK(s *discordgo.Session, i *discordgo.InteractionCreate, opts []*dis
 	respondText(s, i, fmt.Sprintf("AFK set: %s", reason))
 }
 
+func handleConvert(s *discordgo.Session, i *discordgo.InteractionCreate, opts []*discordgo.ApplicationCommandInteractionDataOption) {
+	value := optionFloat(opts, "value", 0)
+	fromUnit := strings.ToLower(strings.TrimSpace(optionString(opts, "from", "")))
+	toUnit := strings.ToLower(strings.TrimSpace(optionString(opts, "to", "")))
+
+	if fromUnit == "" || toUnit == "" {
+		respondText(s, i, "Both from and to units are required.")
+		return
+	}
+
+	result, err := convertUnits(value, fromUnit, toUnit)
+	if err != nil {
+		respondText(s, i, fmt.Sprintf("Conversion error: %v", err))
+		return
+	}
+
+	embed := createSuccessEmbed("Unit Conversion", result)
+	respondEmbed(s, i, embed)
+}
+
+func convertUnits(value float64, from, to string) (string, error) {
+	// Temperature conversions
+	if (from == "c" || from == "f" || from == "k") && (to == "c" || to == "f" || to == "k") {
+		return convertTemperature(value, from, to), nil
+	}
+
+	// Define conversion multipliers
+	conversions := map[string]float64{
+		"ft_to_m":  0.3048,
+		"m_to_ft":  3.28084,
+		"mi_to_km": 1.60934,
+		"km_to_mi": 0.621371,
+		"in_to_cm": 2.54,
+		"cm_to_in": 0.393701,
+		"lb_to_kg": 0.453592,
+		"kg_to_lb": 2.20462,
+		"oz_to_g":  28.3495,
+		"g_to_oz":  0.035274,
+		"gal_to_l": 3.78541,
+		"l_to_gal": 0.264172,
+	}
+
+	key := from + "_to_" + to
+	if multiplier, ok := conversions[key]; ok {
+		result := value * multiplier
+		return fmt.Sprintf("%.2f %s = %.2f %s", value, from, result, to), nil
+	}
+
+	return "", fmt.Errorf("unsupported conversion: %s to %s", from, to)
+}
+
+func convertTemperature(value float64, from, to string) string {
+	var celsius float64
+
+	// Convert to Celsius first
+	switch from {
+	case "f":
+		celsius = (value - 32) * 5 / 9
+	case "k":
+		celsius = value - 273.15
+	case "c":
+		celsius = value
+	default:
+		return "Invalid temperature unit"
+	}
+
+	// Convert from Celsius to target
+	var result float64
+	switch to {
+	case "f":
+		result = celsius*9/5 + 32
+	case "k":
+		result = celsius + 273.15
+	case "c":
+		result = celsius
+	default:
+		return "Invalid temperature unit"
+	}
+
+	return fmt.Sprintf("%.2f°%s = %.2f°%s", value, strings.ToUpper(from), result, strings.ToUpper(to))
+}
+
 func handleClearMyData(s *discordgo.Session, i *discordgo.InteractionCreate, opts []*discordgo.ApplicationCommandInteractionDataOption) {
 	user := interactionUser(i)
 	if user == nil {
@@ -582,14 +686,27 @@ func handleClearMyData(s *discordgo.Session, i *discordgo.InteractionCreate, opt
 	clearUserKeyInObject("battle-stats.json", user.ID)
 	clearUserKeyInObject("afk-users.json", user.ID)
 	clearUserKeyInObject("maze-leaderboard.json", user.ID)
+	clearUserKeyInObject("economy-users.json", user.ID)
+	clearUserKeyInObject("tag-stats.json", user.ID)
 
-	reminders := readReminders()
-	kept := make([]reminderEntry, 0, len(reminders))
-	for _, r := range reminders {
-		if r.UserID != user.ID {
-			kept = append(kept, r)
+	// Clear from transactions array
+	transactions := []transactionLog{}
+	_ = readData("transactions.json", &transactions)
+	kept := []transactionLog{}
+	for _, t := range transactions {
+		if t.UserID != user.ID {
+			kept = append(kept, t)
 		}
 	}
-	writeReminders(kept)
+	_ = writeData("transactions.json", kept)
+
+	reminders := readReminders()
+	keptReminders := make([]reminderEntry, 0, len(reminders))
+	for _, r := range reminders {
+		if r.UserID != user.ID {
+			keptReminders = append(keptReminders, r)
+		}
+	}
+	writeReminders(keptReminders)
 	respondText(s, i, "Your stored bot data has been deleted.")
 }

@@ -2,7 +2,6 @@ package main
 
 import (
 	"fmt"
-	"log"
 	"strconv"
 	"strings"
 	"time"
@@ -19,6 +18,14 @@ func handleComponent(s *discordgo.Session, i *discordgo.InteractionCreate) {
 	data := i.MessageComponentData()
 	if strings.HasPrefix(data.CustomID, "trivia_") {
 		handleTriviaComponent(s, i)
+		return
+	}
+	if strings.HasPrefix(data.CustomID, "trade_") {
+		handleTradeComponent(s, i)
+		return
+	}
+	if strings.HasPrefix(data.CustomID, "tag_") {
+		handleTagComponent(s, i)
 		return
 	}
 	if !strings.HasPrefix(data.CustomID, "maze_") {
@@ -183,35 +190,317 @@ func handleMessageCreate(s *discordgo.Session, m *discordgo.MessageCreate) {
 }
 
 func handleAIChat(s *discordgo.Session, m *discordgo.MessageCreate, isDM bool) {
-	// Show typing indicator
 	_ = s.ChannelTyping(m.ChannelID)
 
-	// Remove bot mention from message if present
+	// Strip bot mention from message
 	cleanMessage := m.Content
 	for _, user := range m.Mentions {
 		if user.ID == s.State.User.ID {
-			cleanMessage = strings.Replace(cleanMessage, "<@"+user.ID+">", "", -1)
-			cleanMessage = strings.Replace(cleanMessage, "<@!"+user.ID+">", "", -1)
+			cleanMessage = strings.ReplaceAll(cleanMessage, "<@"+user.ID+">", "")
+			cleanMessage = strings.ReplaceAll(cleanMessage, "<@!"+user.ID+">", "")
 		}
 	}
 	cleanMessage = strings.TrimSpace(cleanMessage)
 
-	if cleanMessage == "" {
-		embed := createInfoEmbed("👋 Hello!", "I'm Discorbo! How can I help you?\n\nTry asking me a question or use `/help` to see my commands!")
-		_, _ = s.ChannelMessageSendEmbed(m.ChannelID, embed)
-		return
-	}
-
-	// Get AI response
-	response, err := getAIChatResponse(m.Author.ID, m.Author.Username, cleanMessage, isDM)
-	if err != nil {
-		log.Printf("AI chat error: %v", err)
-		embed := createErrorEmbed("Oops!", "I'm having trouble thinking right now. Try using `/help` to see my commands!")
-		_, _ = s.ChannelMessageSendEmbed(m.ChannelID, embed)
-		return
-	}
-
-	// Send response as embed
+	response := getLocalAIResponse(cleanMessage)
 	embed := createInfoEmbed("🤖 Discorbo", response)
 	_, _ = s.ChannelMessageSendEmbed(m.ChannelID, embed)
+}
+
+func handleTradeComponent(s *discordgo.Session, i *discordgo.InteractionCreate) {
+	user := interactionUser(i)
+	if user == nil {
+		_ = s.InteractionRespond(i.Interaction, &discordgo.InteractionResponse{Type: discordgo.InteractionResponseDeferredMessageUpdate})
+		return
+	}
+
+	data := i.MessageComponentData()
+	parts := strings.Split(data.CustomID, "_")
+	if len(parts) < 3 {
+		_ = s.InteractionRespond(i.Interaction, &discordgo.InteractionResponse{Type: discordgo.InteractionResponseDeferredMessageUpdate})
+		return
+	}
+
+	action := parts[1]
+	tradeID := strings.Join(parts[2:], "_")
+
+	tradeMu.Lock()
+	sess, ok := tradeSessions[i.Message.ID]
+	if !ok {
+		tradeMu.Unlock()
+		_ = s.InteractionRespond(i.Interaction, &discordgo.InteractionResponse{
+			Type: discordgo.InteractionResponseChannelMessageWithSource,
+			Data: &discordgo.InteractionResponseData{Content: "Trade session not found or expired.", Flags: discordgo.MessageFlagsEphemeral},
+		})
+		return
+	}
+
+	if sess.TradeID != tradeID {
+		tradeMu.Unlock()
+		_ = s.InteractionRespond(i.Interaction, &discordgo.InteractionResponse{Type: discordgo.InteractionResponseDeferredMessageUpdate})
+		return
+	}
+
+	switch action {
+	case "accept":
+		// Target must accept
+		if user.ID != sess.TargetID {
+			tradeMu.Unlock()
+			_ = s.InteractionRespond(i.Interaction, &discordgo.InteractionResponse{
+				Type: discordgo.InteractionResponseChannelMessageWithSource,
+				Data: &discordgo.InteractionResponseData{Content: "Only the trade target can accept.", Flags: discordgo.MessageFlagsEphemeral},
+			})
+			return
+		}
+
+		// Trade accepted - show trading UI (simplified version without buttons for now)
+		tradeMu.Unlock()
+		embed := createSuccessEmbed("Trade Accepted",
+			"Trade feature is under development. You can manually exchange items using /shop and direct messages for now.")
+		_ = s.InteractionRespond(i.Interaction, &discordgo.InteractionResponse{
+			Type: discordgo.InteractionResponseUpdateMessage,
+			Data: &discordgo.InteractionResponseData{Embeds: []*discordgo.MessageEmbed{embed}, Components: []discordgo.MessageComponent{}},
+		})
+
+	case "decline":
+		if user.ID != sess.TargetID {
+			tradeMu.Unlock()
+			_ = s.InteractionRespond(i.Interaction, &discordgo.InteractionResponse{
+				Type: discordgo.InteractionResponseChannelMessageWithSource,
+				Data: &discordgo.InteractionResponseData{Content: "Only the trade target can decline.", Flags: discordgo.MessageFlagsEphemeral},
+			})
+			return
+		}
+
+		delete(tradeSessions, i.Message.ID)
+		tradeMu.Unlock()
+
+		embed := createErrorEmbed("Trade Declined", "The trade request was declined.")
+		_ = s.InteractionRespond(i.Interaction, &discordgo.InteractionResponse{
+			Type: discordgo.InteractionResponseUpdateMessage,
+			Data: &discordgo.InteractionResponseData{Embeds: []*discordgo.MessageEmbed{embed}, Components: []discordgo.MessageComponent{}},
+		})
+
+	default:
+		tradeMu.Unlock()
+		_ = s.InteractionRespond(i.Interaction, &discordgo.InteractionResponse{Type: discordgo.InteractionResponseDeferredMessageUpdate})
+	}
+}
+
+func handleTagComponent(s *discordgo.Session, i *discordgo.InteractionCreate) {
+	user := interactionUser(i)
+	if user == nil {
+		_ = s.InteractionRespond(i.Interaction, &discordgo.InteractionResponse{Type: discordgo.InteractionResponseDeferredMessageUpdate})
+		return
+	}
+
+	data := i.MessageComponentData()
+	parts := strings.Split(data.CustomID, "_")
+	if len(parts) < 2 {
+		_ = s.InteractionRespond(i.Interaction, &discordgo.InteractionResponse{Type: discordgo.InteractionResponseDeferredMessageUpdate})
+		return
+	}
+
+	action := parts[1]
+
+	sessionMu.Lock()
+	sess, ok := tagSessions[i.Message.ID]
+	if !ok {
+		sessionMu.Unlock()
+		_ = s.InteractionRespond(i.Interaction, &discordgo.InteractionResponse{
+			Type: discordgo.InteractionResponseChannelMessageWithSource,
+			Data: &discordgo.InteractionResponseData{Content: "Game session not found or expired.", Flags: discordgo.MessageFlagsEphemeral},
+		})
+		return
+	}
+
+	// Determine current player
+	currentPlayerID := sess.Player1ID
+	if sess.CurrentTurn == 1 {
+		currentPlayerID = sess.Player2ID
+	}
+
+	// Verify it's the current player's turn
+	if user.ID != currentPlayerID {
+		sessionMu.Unlock()
+		_ = s.InteractionRespond(i.Interaction, &discordgo.InteractionResponse{
+			Type: discordgo.InteractionResponseChannelMessageWithSource,
+			Data: &discordgo.InteractionResponseData{Content: "It's not your turn!", Flags: discordgo.MessageFlagsEphemeral},
+		})
+		return
+	}
+
+	switch action {
+	case "accept":
+		// Accept challenge
+		if user.ID != sess.Player2ID {
+			sessionMu.Unlock()
+			_ = s.InteractionRespond(i.Interaction, &discordgo.InteractionResponse{
+				Type: discordgo.InteractionResponseChannelMessageWithSource,
+				Data: &discordgo.InteractionResponseData{Content: "Only the challenged player can accept.", Flags: discordgo.MessageFlagsEphemeral},
+			})
+			return
+		}
+
+		// Generate board and start game
+		sess.Board = generateTagBoard()
+		sess.Player1X = 0
+		sess.Player1Y = 0
+		sess.Player2X = 4
+		sess.Player2Y = 4
+		sess.StartTime = time.Now().UnixMilli()
+		sess.CurrentTurn = 0
+		sess.Moves = 0
+		sess.MaxMoves = 20
+
+		embed := buildTagEmbed(sess)
+		buttons := buildTagButtons(sess.SessionID)
+
+		sessionMu.Unlock()
+
+		_ = s.InteractionRespond(i.Interaction, &discordgo.InteractionResponse{
+			Type: discordgo.InteractionResponseUpdateMessage,
+			Data: &discordgo.InteractionResponseData{Embeds: []*discordgo.MessageEmbed{embed}, Components: buttons},
+		})
+
+	case "decline":
+		if user.ID != sess.Player2ID {
+			sessionMu.Unlock()
+			_ = s.InteractionRespond(i.Interaction, &discordgo.InteractionResponse{
+				Type: discordgo.InteractionResponseChannelMessageWithSource,
+				Data: &discordgo.InteractionResponseData{Content: "Only the challenged player can decline.", Flags: discordgo.MessageFlagsEphemeral},
+			})
+			return
+		}
+
+		delete(tagSessions, i.Message.ID)
+		sessionMu.Unlock()
+
+		embed := createErrorEmbed("Challenge Declined", "The tag challenge was declined.")
+		_ = s.InteractionRespond(i.Interaction, &discordgo.InteractionResponse{
+			Type: discordgo.InteractionResponseUpdateMessage,
+			Data: &discordgo.InteractionResponseData{Embeds: []*discordgo.MessageEmbed{embed}, Components: []discordgo.MessageComponent{}},
+		})
+
+	case "up", "down", "left", "right", "stay":
+		// Process move
+		moved := processTagMove(sess, action)
+		if !moved {
+			sessionMu.Unlock()
+			_ = s.InteractionRespond(i.Interaction, &discordgo.InteractionResponse{
+				Type: discordgo.InteractionResponseChannelMessageWithSource,
+				Data: &discordgo.InteractionResponseData{Content: "Invalid move!", Flags: discordgo.MessageFlagsEphemeral},
+			})
+			return
+		}
+
+		sess.Moves++
+
+		// Check win condition
+		gameOver := false
+		winner := ""
+		if sess.Player1X == sess.Player2X && sess.Player1Y == sess.Player2Y {
+			gameOver = true
+			if sess.CurrentTurn == 0 {
+				winner = sess.Player1Name
+			} else {
+				winner = sess.Player2Name
+			}
+		} else if sess.Moves >= sess.MaxMoves {
+			gameOver = true
+			winner = "draw"
+		}
+
+		if !gameOver {
+			// Switch turn
+			sess.CurrentTurn = 1 - sess.CurrentTurn
+		}
+
+		embed := buildTagEmbed(sess)
+		var buttons []discordgo.MessageComponent
+
+		if gameOver {
+			delete(tagSessions, i.Message.ID)
+			sessionMu.Unlock()
+
+			// Award coins
+			if winner != "draw" {
+				remainingMoves := sess.MaxMoves - sess.Moves
+				coins := 50 + (remainingMoves * 10)
+
+				winnerID := sess.Player1ID
+				loserID := sess.Player2ID
+				if winner == sess.Player2Name {
+					winnerID = sess.Player2ID
+					loserID = sess.Player1ID
+				}
+
+				// Update daily rewards
+				dailyUsers := map[string]dailyUser{}
+				_ = readData("daily-rewards.json", &dailyUsers)
+				du := dailyUsers[winnerID]
+				du.Coins += coins
+				du.Username = winner
+				dailyUsers[winnerID] = du
+				_ = writeData("daily-rewards.json", dailyUsers)
+
+				// Update tag stats
+				tagStatsMap := map[string]tagStats{}
+				_ = readData("tag-stats.json", &tagStatsMap)
+
+				ws := tagStatsMap[winnerID]
+				ws.Username = winner
+				ws.Wins++
+				ws.TotalGames++
+				ws.CoinsEarned += coins
+				tagStatsMap[winnerID] = ws
+
+				loserName := sess.Player2Name
+				if winner == sess.Player2Name {
+					loserName = sess.Player1Name
+				}
+				ls := tagStatsMap[loserID]
+				ls.Username = loserName
+				ls.Losses++
+				ls.TotalGames++
+				tagStatsMap[loserID] = ls
+
+				_ = writeData("tag-stats.json", tagStatsMap)
+
+				embed.Fields = append(embed.Fields, &discordgo.MessageEmbedField{
+					Name:   "🏆 Winner",
+					Value:  fmt.Sprintf("%s wins and earns %d coins!", winner, coins),
+					Inline: false,
+				})
+			} else {
+				embed.Fields = append(embed.Fields, &discordgo.MessageEmbedField{
+					Name:   "⚖️ Draw",
+					Value:  "Maximum moves reached! Both players earn 10 coins.",
+					Inline: false,
+				})
+
+				// Give both players 10 coins
+				dailyUsers := map[string]dailyUser{}
+				_ = readData("daily-rewards.json", &dailyUsers)
+				for _, pid := range []string{sess.Player1ID, sess.Player2ID} {
+					du := dailyUsers[pid]
+					du.Coins += 10
+					dailyUsers[pid] = du
+				}
+				_ = writeData("daily-rewards.json", dailyUsers)
+			}
+		} else {
+			buttons = buildTagButtons(sess.SessionID)
+			sessionMu.Unlock()
+		}
+
+		_ = s.InteractionRespond(i.Interaction, &discordgo.InteractionResponse{
+			Type: discordgo.InteractionResponseUpdateMessage,
+			Data: &discordgo.InteractionResponseData{Embeds: []*discordgo.MessageEmbed{embed}, Components: buttons},
+		})
+
+	default:
+		sessionMu.Unlock()
+		_ = s.InteractionRespond(i.Interaction, &discordgo.InteractionResponse{Type: discordgo.InteractionResponseDeferredMessageUpdate})
+	}
 }

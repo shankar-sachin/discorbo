@@ -197,6 +197,108 @@ type reminderEntry struct {
 	GuildID   string `json:"guildId,omitempty"`
 }
 
+// Economy types
+type shopItem struct {
+	ID          string  `json:"id"`
+	Name        string  `json:"name"`
+	Description string  `json:"description"`
+	Price       int     `json:"price"`
+	Emoji       string  `json:"emoji"`
+	Category    string  `json:"category"` // boost, collectible, consumable
+	MaxOwned    int     `json:"maxOwned"` // -1 unlimited
+	BoostType   string  `json:"boostType,omitempty"`
+	BoostValue  float64 `json:"boostValue,omitempty"`
+}
+
+type economyUser struct {
+	Username     string          `json:"username"`
+	Coins        int             `json:"coins"`
+	Inventory    []inventoryItem `json:"inventory"`
+	ActiveBoosts []activeBoost   `json:"activeBoosts"`
+	TradeHistory []tradeRecord   `json:"tradeHistory"`
+	TotalSpent   int             `json:"totalSpent"`
+	TotalEarned  int             `json:"totalEarned"`
+}
+
+type inventoryItem struct {
+	ItemID      string `json:"itemId"`
+	Quantity    int    `json:"quantity"`
+	PurchasedAt int64  `json:"purchasedAt"`
+}
+
+type activeBoost struct {
+	BoostType  string  `json:"boostType"`
+	Multiplier float64 `json:"multiplier"`
+	ExpiresAt  int64   `json:"expiresAt"`
+}
+
+type tradeRecord struct {
+	TradeID   string   `json:"tradeId"`
+	OtherUser string   `json:"otherUser"`
+	GaveCoins int      `json:"gaveCoins"`
+	GaveItems []string `json:"gaveItems"`
+	GotCoins  int      `json:"gotCoins"`
+	GotItems  []string `json:"gotItems"`
+	Timestamp int64    `json:"timestamp"`
+}
+
+// In-memory trade sessions
+type tradeSession struct {
+	TradeID         string
+	InitiatorID     string
+	TargetID        string
+	InitOffer       tradeOffer
+	TargetOffer     tradeOffer
+	InitConfirmed   bool
+	TargetConfirmed bool
+	ExpiresAt       int64
+	MessageID       string
+	ChannelID       string
+}
+
+type tradeOffer struct {
+	Coins   int
+	ItemIDs []string
+}
+
+type transactionLog struct {
+	UserID    string `json:"userId"`
+	Type      string `json:"type"` // purchase, sell, admin_grant, admin_take, trade
+	ItemID    string `json:"itemId,omitempty"`
+	Amount    int    `json:"amount"`
+	GrantedBy string `json:"grantedBy,omitempty"`
+	Reason    string `json:"reason,omitempty"`
+	Timestamp int64  `json:"timestamp"`
+}
+
+// Tag game types
+type tagSession struct {
+	SessionID   string
+	Player1ID   string
+	Player1Name string
+	Player2ID   string
+	Player2Name string
+	CurrentTurn int // 0 = P1, 1 = P2
+	Player1X    int
+	Player1Y    int
+	Player2X    int
+	Player2Y    int
+	Board       [][]string // 5x5 grid with obstacles
+	Moves       int
+	MaxMoves    int // 20 moves
+	StartTime   int64
+	MessageID   string
+	ChannelID   string
+}
+
+type tagStats struct {
+	Username    string `json:"username"`
+	Wins        int    `json:"wins"`
+	Losses      int    `json:"losses"`
+	TotalGames  int    `json:"totalGames"`
+	CoinsEarned int    `json:"coinsEarned"`
+}
+
 // Global state
 var (
 	botStartedAt   = time.Now()
@@ -205,6 +307,9 @@ var (
 	dataMu         sync.Mutex
 	triviaMu       sync.Mutex
 	triviaSessions = map[string]triviaSession{}
+	tradeMu        sync.Mutex
+	tradeSessions  = map[string]*tradeSession{}
+	tagSessions    = map[string]*tagSession{}
 )
 
 // Command definitions
@@ -288,6 +393,15 @@ func funCommands() []*discordgo.ApplicationCommand {
 		{Name: "trivia-leaderboard", Description: "View the trivia leaderboard"},
 		{Name: "vibecheck", Description: "Check your current vibe rating", Options: []*discordgo.ApplicationCommandOption{{Type: discordgo.ApplicationCommandOptionUser, Name: "user", Description: "Check someone else's vibe", Required: false}}},
 		{Name: "would-you-rather", Description: "Get a would you rather question"},
+		{Name: "tag", Description: "Play a strategic tag game!", Options: []*discordgo.ApplicationCommandOption{
+			{Type: discordgo.ApplicationCommandOptionSubCommand, Name: "challenge", Description: "Challenge someone to tag", Options: []*discordgo.ApplicationCommandOption{
+				{Type: discordgo.ApplicationCommandOptionUser, Name: "opponent", Description: "Who to challenge", Required: true},
+			}},
+			{Type: discordgo.ApplicationCommandOptionSubCommand, Name: "leaderboard", Description: "View tag leaderboard"},
+			{Type: discordgo.ApplicationCommandOptionSubCommand, Name: "stats", Description: "View tag stats", Options: []*discordgo.ApplicationCommandOption{
+				{Type: discordgo.ApplicationCommandOptionUser, Name: "user", Description: "User to check", Required: false},
+			}},
+		}},
 	}
 }
 
@@ -331,6 +445,59 @@ func utilityCommands() []*discordgo.ApplicationCommand {
 			{Type: discordgo.ApplicationCommandOptionString, Name: "from", Description: "Source language (default auto)", Required: false},
 		}},
 		{Name: "userinfo", Description: "Display detailed information about a user", Options: []*discordgo.ApplicationCommandOption{{Type: discordgo.ApplicationCommandOptionUser, Name: "user", Description: "User", Required: false}}},
+		{Name: "shop", Description: "Browse and buy items from the shop", Options: []*discordgo.ApplicationCommandOption{
+			{Type: discordgo.ApplicationCommandOptionSubCommand, Name: "list", Description: "Browse shop items", Options: []*discordgo.ApplicationCommandOption{
+				{Type: discordgo.ApplicationCommandOptionString, Name: "category", Description: "Filter by category", Required: false, Choices: []*discordgo.ApplicationCommandOptionChoice{
+					{Name: "All", Value: "all"},
+					{Name: "Boosts", Value: "boost"},
+					{Name: "Collectibles", Value: "collectible"},
+					{Name: "Consumables", Value: "consumable"},
+				}},
+			}},
+			{Type: discordgo.ApplicationCommandOptionSubCommand, Name: "buy", Description: "Purchase an item", Options: []*discordgo.ApplicationCommandOption{
+				{Type: discordgo.ApplicationCommandOptionString, Name: "item_id", Description: "Item ID to buy", Required: true},
+				{Type: discordgo.ApplicationCommandOptionInteger, Name: "quantity", Description: "How many to buy", Required: false},
+			}},
+			{Type: discordgo.ApplicationCommandOptionSubCommand, Name: "sell", Description: "Sell an item for 50% refund", Options: []*discordgo.ApplicationCommandOption{
+				{Type: discordgo.ApplicationCommandOptionString, Name: "item_id", Description: "Item ID to sell", Required: true},
+				{Type: discordgo.ApplicationCommandOptionInteger, Name: "quantity", Description: "How many to sell", Required: false},
+			}},
+		}},
+		{Name: "inventory", Description: "View and manage your inventory", Options: []*discordgo.ApplicationCommandOption{
+			{Type: discordgo.ApplicationCommandOptionSubCommand, Name: "view", Description: "View your inventory"},
+			{Type: discordgo.ApplicationCommandOptionSubCommand, Name: "use", Description: "Use/activate an item", Options: []*discordgo.ApplicationCommandOption{
+				{Type: discordgo.ApplicationCommandOptionString, Name: "item_id", Description: "Item to use", Required: true},
+			}},
+			{Type: discordgo.ApplicationCommandOptionSubCommand, Name: "info", Description: "View item details", Options: []*discordgo.ApplicationCommandOption{
+				{Type: discordgo.ApplicationCommandOptionString, Name: "item_id", Description: "Item to inspect", Required: true},
+			}},
+		}},
+		{Name: "balance", Description: "View your coin balance and stats"},
+		{Name: "trade", Description: "Trade coins and items with other users", Options: []*discordgo.ApplicationCommandOption{
+			{Type: discordgo.ApplicationCommandOptionSubCommand, Name: "offer", Description: "Start a trade with someone", Options: []*discordgo.ApplicationCommandOption{
+				{Type: discordgo.ApplicationCommandOptionUser, Name: "user", Description: "User to trade with", Required: true},
+			}},
+		}},
+		{Name: "economy-admin", Description: "Manage server economy (Admin only)", Options: []*discordgo.ApplicationCommandOption{
+			{Type: discordgo.ApplicationCommandOptionSubCommand, Name: "grant", Description: "Give coins to user", Options: []*discordgo.ApplicationCommandOption{
+				{Type: discordgo.ApplicationCommandOptionUser, Name: "user", Description: "User to grant coins", Required: true},
+				{Type: discordgo.ApplicationCommandOptionInteger, Name: "coins", Description: "Amount of coins", Required: true},
+				{Type: discordgo.ApplicationCommandOptionString, Name: "reason", Description: "Reason for grant", Required: false},
+			}},
+			{Type: discordgo.ApplicationCommandOptionSubCommand, Name: "take", Description: "Remove coins from user", Options: []*discordgo.ApplicationCommandOption{
+				{Type: discordgo.ApplicationCommandOptionUser, Name: "user", Description: "User to take coins from", Required: true},
+				{Type: discordgo.ApplicationCommandOptionInteger, Name: "coins", Description: "Amount of coins", Required: true},
+				{Type: discordgo.ApplicationCommandOptionString, Name: "reason", Description: "Reason for removal", Required: false},
+			}},
+			{Type: discordgo.ApplicationCommandOptionSubCommand, Name: "transactions", Description: "View transaction history", Options: []*discordgo.ApplicationCommandOption{
+				{Type: discordgo.ApplicationCommandOptionUser, Name: "user", Description: "User to check", Required: false},
+			}},
+		}},
+		{Name: "convert", Description: "Convert between units", Options: []*discordgo.ApplicationCommandOption{
+			{Type: discordgo.ApplicationCommandOptionNumber, Name: "value", Description: "Value to convert", Required: true},
+			{Type: discordgo.ApplicationCommandOptionString, Name: "from", Description: "Source unit (f, c, k, ft, m, mi, km, lb, kg, etc.)", Required: true},
+			{Type: discordgo.ApplicationCommandOptionString, Name: "to", Description: "Target unit", Required: true},
+		}},
 	}
 }
 

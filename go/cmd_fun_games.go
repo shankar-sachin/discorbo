@@ -135,6 +135,19 @@ func handleDaily(s *discordgo.Session, i *discordgo.InteractionCreate, opts []*d
 		if rand.Float64() < 0.1 {
 			reward *= 2
 		}
+
+		// Apply active boosts
+		boosts := getActiveBoosts(user.ID)
+		multiplier := 1.0
+		for _, b := range boosts {
+			if b.BoostType == "daily_multiplier" || b.BoostType == "global_coin_multiplier" {
+				multiplier *= b.Multiplier
+			}
+		}
+		if multiplier > 1.0 {
+			reward = int(float64(reward) * multiplier)
+		}
+
 		u.Coins += reward
 		u.LastClaim = now
 		u.TotalClaims++
@@ -243,6 +256,19 @@ func handleBossRaid(s *discordgo.Session, i *discordgo.InteractionCreate, opts [
 		if crit {
 			damage *= 2
 		}
+
+		// Apply active boosts
+		boosts := getActiveBoosts(user.ID)
+		multiplier := 1.0
+		for _, b := range boosts {
+			if b.BoostType == "raid_multiplier" || b.BoostType == "global_coin_multiplier" {
+				multiplier *= b.Multiplier
+			}
+		}
+		if multiplier > 1.0 {
+			damage = int(float64(damage) * multiplier)
+		}
+
 		g.Boss.CurrentHP = max(0, g.Boss.CurrentHP-damage)
 		p.Damage += damage
 		p.Attacks++
@@ -559,3 +585,178 @@ func handleLoot(s *discordgo.Session, i *discordgo.InteractionCreate, opts []*di
 		respondText(s, i, "Unknown subcommand.")
 	}
 }
+
+func handleTag(s *discordgo.Session, i *discordgo.InteractionCreate, opts []*discordgo.ApplicationCommandInteractionDataOption) {
+	user := interactionUser(i)
+	if user == nil {
+		respondText(s, i, "Unable to identify user for tag.")
+		return
+	}
+
+	sub, subOpts := getSubcommand(opts)
+	if sub == "" {
+		sub = "challenge"
+	}
+
+	switch sub {
+	case "challenge":
+		opponent := optionUser(subOpts, "opponent")
+		if opponent == nil {
+			respondText(s, i, "You must specify an opponent.")
+			return
+		}
+		if opponent.Bot {
+			respondText(s, i, "You cannot challenge bots.")
+			return
+		}
+		if opponent.ID == user.ID {
+			respondText(s, i, "You cannot challenge yourself.")
+			return
+		}
+
+		sessionID := fmt.Sprintf("%s_%s_%d", user.ID, opponent.ID, time.Now().UnixMilli())
+
+		embed := &discordgo.MessageEmbed{
+			Title:       "🏃 Tag Challenge!",
+			Description: fmt.Sprintf("%s challenges %s to a game of tag!\n\nRules: 5x5 grid, 20 moves max. First to tag the opponent wins!", user.Username, opponent.Username),
+			Color:       ColorPurple,
+		}
+
+		buttons := discordgo.ActionsRow{
+			Components: []discordgo.MessageComponent{
+				discordgo.Button{
+					Label:    "Accept",
+					Style:    discordgo.SuccessButton,
+					CustomID: fmt.Sprintf("tag_accept_%s", sessionID),
+				},
+				discordgo.Button{
+					Label:    "Decline",
+					Style:    discordgo.DangerButton,
+					CustomID: fmt.Sprintf("tag_decline_%s", sessionID),
+				},
+			},
+		}
+
+		resp := &discordgo.InteractionResponse{
+			Type: discordgo.InteractionResponseChannelMessageWithSource,
+			Data: &discordgo.InteractionResponseData{
+				Embeds:     []*discordgo.MessageEmbed{embed},
+				Components: []discordgo.MessageComponent{buttons},
+			},
+		}
+
+		if err := s.InteractionRespond(i.Interaction, resp); err != nil {
+			return
+		}
+
+		msg, _ := s.InteractionResponse(i.Interaction)
+		if msg != nil {
+			sessionMu.Lock()
+			tagSessions[msg.ID] = &tagSession{
+				SessionID:   sessionID,
+				Player1ID:   user.ID,
+				Player1Name: user.Username,
+				Player2ID:   opponent.ID,
+				Player2Name: opponent.Username,
+				MessageID:   msg.ID,
+				ChannelID:   i.ChannelID,
+			}
+			sessionMu.Unlock()
+
+			// Auto-cleanup after 5 minutes
+			go func(msgID string) {
+				time.Sleep(5 * time.Minute)
+				sessionMu.Lock()
+				delete(tagSessions, msgID)
+				sessionMu.Unlock()
+			}(msg.ID)
+		}
+
+	case "leaderboard":
+		tagStatsMap := map[string]tagStats{}
+		_ = readData("tag-stats.json", &tagStatsMap)
+
+		if len(tagStatsMap) == 0 {
+			respondText(s, i, "No tag games played yet!")
+			return
+		}
+
+		type row struct {
+			Name        string
+			Wins        int
+			Losses      int
+			TotalGames  int
+			CoinsEarned int
+		}
+
+		rows := []row{}
+		for _, s := range tagStatsMap {
+			rows = append(rows, row{
+				Name:        s.Username,
+				Wins:        s.Wins,
+				Losses:      s.Losses,
+				TotalGames:  s.TotalGames,
+				CoinsEarned: s.CoinsEarned,
+			})
+		}
+
+		sort.Slice(rows, func(a, b int) bool {
+			return rows[a].Wins > rows[b].Wins
+		})
+
+		if len(rows) > 10 {
+			rows = rows[:10]
+		}
+
+		lines := []string{}
+		for idx, r := range rows {
+			lines = append(lines, fmt.Sprintf("%d. **%s** - %d wins, %d losses (%d coins earned)",
+				idx+1, r.Name, r.Wins, r.Losses, r.CoinsEarned))
+		}
+
+		embed := &discordgo.MessageEmbed{
+			Title:       "🏆 Tag Leaderboard",
+			Description: strings.Join(lines, "\n"),
+			Color:       ColorGold,
+		}
+		respondEmbed(s, i, embed)
+
+	case "stats":
+		targetUser := user
+		if u := optionUser(subOpts, "user"); u != nil {
+			targetUser = u
+		}
+
+		tagStatsMap := map[string]tagStats{}
+		_ = readData("tag-stats.json", &tagStatsMap)
+
+		stats := tagStatsMap[targetUser.ID]
+		if stats.Username == "" {
+			respondText(s, i, fmt.Sprintf("%s hasn't played any tag games yet!", targetUser.Username))
+			return
+		}
+
+		winRate := 0.0
+		if stats.TotalGames > 0 {
+			winRate = float64(stats.Wins) / float64(stats.TotalGames) * 100
+		}
+
+		embed := &discordgo.MessageEmbed{
+			Title: fmt.Sprintf("🏃 %s's Tag Stats", stats.Username),
+			Color: ColorBlue,
+			Fields: []*discordgo.MessageEmbedField{
+				{Name: "Wins", Value: fmt.Sprintf("%d", stats.Wins), Inline: true},
+				{Name: "Losses", Value: fmt.Sprintf("%d", stats.Losses), Inline: true},
+				{Name: "Win Rate", Value: fmt.Sprintf("%.1f%%", winRate), Inline: true},
+				{Name: "Total Games", Value: fmt.Sprintf("%d", stats.TotalGames), Inline: true},
+				{Name: "Coins Earned", Value: fmt.Sprintf("%d", stats.CoinsEarned), Inline: true},
+			},
+		}
+		respondEmbed(s, i, embed)
+
+	default:
+		respondText(s, i, "Unknown subcommand.")
+	}
+}
+
+const ColorGold = 0xFFD700

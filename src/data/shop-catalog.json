@@ -1,0 +1,104 @@
+{
+  "daily_boost": {
+    "id": "daily_boost",
+    "name": "Daily Boost Potion",
+    "description": "2x daily rewards for 24 hours",
+    "price": 500,
+    "emoji": "🧪",
+    "category": "boost",
+    "maxOwned": 5,
+    "boostType": "daily_multiplier",
+    "boostValue": 2.0
+  },
+  "raid_boost": {
+    "id": "raid_boost",
+    "name": "Raid Damage Boost",
+    "description": "1.5x boss raid damage for 24 hours",
+    "price": 400,
+    "emoji": "⚔️",
+    "category": "boost",
+    "maxOwned": 5,
+    "boostType": "raid_multiplier",
+    "boostValue": 1.5
+  },
+  "lucky_coin": {
+    "id": "lucky_coin",
+    "name": "Lucky Coin",
+    "description": "Rare collectible golden coin",
+    "price": 1000,
+    "emoji": "🪙",
+    "category": "collectible",
+    "maxOwned": -1
+  },
+  "inventory_slot": {
+    "id": "inventory_slot",
+    "name": "Inventory Expansion",
+    "description": "Unlock 5 more inventory slots",
+    "price": 750,
+    "emoji": "📦",
+    "category": "boost",
+    "maxOwned": 10,
+    "boostType": "inventory_size",
+    "boostValue": 5
+  },
+  "gem_ruby": {
+    "id": "gem_ruby",
+    "name": "Ruby Gem",
+    "description": "Shimmering red gemstone",
+    "price": 800,
+    "emoji": "💎",
+    "category": "collectible",
+    "maxOwned": -1
+  },
+  "streak_protector": {
+    "id": "streak_protector",
+    "name": "Streak Protection",
+    "description": "Protects your daily streak once if you miss a day",
+    "price": 1500,
+    "emoji": "🛡️",
+    "category": "consumable",
+    "maxOwned": 3,
+    "boostType": "streak_protection",
+    "boostValue": 1
+  },
+  "xp_boost": {
+    "id": "xp_boost",
+    "name": "XP Multiplier",
+    "description": "2x quest XP for 12 hours",
+    "price": 350,
+    "emoji": "✨",
+    "category": "boost",
+    "maxOwned": 5,
+    "boostType": "xp_multiplier",
+    "boostValue": 2.0
+  },
+  "trophy_gold": {
+    "id": "trophy_gold",
+    "name": "Golden Trophy",
+    "description": "Prestigious achievement trophy",
+    "price": 2000,
+    "emoji": "🏆",
+    "category": "collectible",
+    "maxOwned": -1
+  },
+  "coin_doubler": {
+    "id": "coin_doubler",
+    "name": "Coin Doubler",
+    "description": "2x coins from all sources for 6 hours",
+    "price": 1200,
+    "emoji": "💰",
+    "category": "boost",
+    "maxOwned": 3,
+    "boostType": "global_coin_multiplier",
+    "boostValue": 2.0
+  },
+  "mystery_box": {
+    "id": "mystery_box",
+    "name": "Mystery Box",
+    "description": "Contains a random item or coin reward",
+    "price": 600,
+    "emoji": "📦",
+    "category": "consumable",
+    "maxOwned": -1
+  }
+}

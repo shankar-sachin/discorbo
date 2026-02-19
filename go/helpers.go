@@ -1,20 +1,27 @@
 package main
 
 import (
-	"bytes"
-	"encoding/json"
 	"errors"
 	"fmt"
 	"io"
+	"math"
 	"math/rand"
 	"net/http"
-	"os"
+	"regexp"
 	"strconv"
 	"strings"
 	"time"
 	"unicode"
 
 	"github.com/bwmarrin/discordgo"
+)
+
+// Math constants
+const (
+	mathPi  = 3.141592653589793
+	mathE   = 2.718281828459045
+	mathTau = 6.283185307179586
+	mathPhi = 1.618033988749895
 )
 
 // Embed color constants
@@ -245,22 +252,53 @@ func handleRoll(s *discordgo.Session, i *discordgo.InteractionCreate, expr strin
 	}
 	rolls := make([]int, 0, count)
 	total := 0
+	hasNat20 := false
+	hasNat1 := false
+
 	for j := 0; j < count; j++ {
 		r := rand.Intn(sides) + 1
 		rolls = append(rolls, r)
 		total += r
+		if sides == 20 && r == 20 {
+			hasNat20 = true
+		}
+		if r == 1 {
+			hasNat1 = true
+		}
 	}
+
 	final := total + mod
 	rollsStr := make([]string, len(rolls))
-	for i, r := range rolls {
-		rollsStr[i] = fmt.Sprintf("%d", r)
+	for idx, r := range rolls {
+		// Highlight nat 20s and nat 1s
+		if sides == 20 && r == 20 {
+			rollsStr[idx] = fmt.Sprintf("**%d**", r)
+		} else if r == 1 {
+			rollsStr[idx] = fmt.Sprintf("*%d*", r)
+		} else {
+			rollsStr[idx] = fmt.Sprintf("%d", r)
+		}
 	}
-	desc := fmt.Sprintf("**Rolls:** [%s]", strings.Join(rollsStr, ", "))
+
+	average := float64(total) / float64(count)
+
+	desc := fmt.Sprintf("**Rolls:** [%s]\n**Average:** %.1f", strings.Join(rollsStr, ", "), average)
 	if mod != 0 {
 		desc += fmt.Sprintf("\n**Modifier:** %+d", mod)
 	}
-	desc += fmt.Sprintf("\n**Total:** %d", final)
+
+	if hasNat20 {
+		desc += "\n🎉 **NATURAL 20!** Critical success!"
+	}
+	if hasNat1 {
+		desc += "\n💀 **NATURAL 1!** Critical failure!"
+	}
+
 	embed := createFunEmbed(fmt.Sprintf("🎲 Rolling %s", expr), desc)
+	embed.Fields = []*discordgo.MessageEmbedField{
+		{Name: "Total", Value: fmt.Sprintf("**%d**", final), Inline: true},
+	}
+
 	respondEmbed(s, i, embed)
 }
 
@@ -316,6 +354,20 @@ type mathParser struct {
 }
 
 func evalMath(expr string) (string, error) {
+	// Step 1: Replace constants
+	expr = replaceConstants(expr)
+
+	// Step 2: Parse scientific notation
+	expr = parseScientific(expr)
+
+	// Step 3: Evaluate functions
+	var err error
+	expr, err = evaluateFunctions(expr)
+	if err != nil {
+		return "", err
+	}
+
+	// Step 4: Continue with existing recursive descent parser
 	p := &mathParser{input: strings.TrimSpace(expr)}
 	if p.input == "" {
 		return "", errors.New("empty")
@@ -332,6 +384,106 @@ func evalMath(expr string) (string, error) {
 		return strconv.FormatInt(int64(v), 10), nil
 	}
 	return strconv.FormatFloat(v, 'f', -1, 64), nil
+}
+
+func replaceConstants(expr string) string {
+	expr = strings.ReplaceAll(expr, "pi", fmt.Sprintf("%f", mathPi))
+	expr = strings.ReplaceAll(expr, "e", fmt.Sprintf("%f", mathE))
+	expr = strings.ReplaceAll(expr, "tau", fmt.Sprintf("%f", mathTau))
+	expr = strings.ReplaceAll(expr, "phi", fmt.Sprintf("%f", mathPhi))
+	return expr
+}
+
+func parseScientific(expr string) string {
+	// Replace scientific notation like 1e6 → 1000000
+	pattern := regexp.MustCompile(`(\d+(?:\.\d+)?)e([+-]?\d+)`)
+	return pattern.ReplaceAllStringFunc(expr, func(match string) string {
+		val, err := strconv.ParseFloat(match, 64)
+		if err != nil {
+			return match
+		}
+		return fmt.Sprintf("%f", val)
+	})
+}
+
+func evaluateFunctions(expr string) (string, error) {
+	// Regex: \w+\([^)]+\)
+	funcPattern := regexp.MustCompile(`(\w+)\(([^)]+)\)`)
+
+	for funcPattern.MatchString(expr) {
+		matches := funcPattern.FindStringSubmatch(expr)
+		if len(matches) < 3 {
+			break
+		}
+
+		funcName := matches[1]
+		argExpr := matches[2]
+
+		// Recursively evaluate argument
+		argResult, err := evalMath(argExpr)
+		if err != nil {
+			return "", err
+		}
+
+		argVal, err := strconv.ParseFloat(argResult, 64)
+		if err != nil {
+			return "", err
+		}
+
+		result, err := parseFunction(funcName, argVal)
+		if err != nil {
+			return "", err
+		}
+
+		// Replace function call with result
+		expr = strings.Replace(expr, matches[0], fmt.Sprintf("%f", result), 1)
+	}
+
+	return expr, nil
+}
+
+func parseFunction(name string, arg float64) (float64, error) {
+	switch strings.ToLower(name) {
+	case "sqrt":
+		if arg < 0 {
+			return 0, errors.New("sqrt of negative number")
+		}
+		return math.Sqrt(arg), nil
+	case "sin":
+		return math.Sin(arg), nil // radians
+	case "cos":
+		return math.Cos(arg), nil
+	case "tan":
+		return math.Tan(arg), nil
+	case "asin":
+		return math.Asin(arg), nil
+	case "acos":
+		return math.Acos(arg), nil
+	case "atan":
+		return math.Atan(arg), nil
+	case "log":
+		if arg <= 0 {
+			return 0, errors.New("log of non-positive number")
+		}
+		return math.Log10(arg), nil
+	case "ln":
+		if arg <= 0 {
+			return 0, errors.New("ln of non-positive number")
+		}
+		return math.Log(arg), nil
+	case "abs":
+		return math.Abs(arg), nil
+	case "ceil":
+		return math.Ceil(arg), nil
+	case "floor":
+		return math.Floor(arg), nil
+	case "round":
+		return math.Round(arg), nil
+	case "exp":
+		return math.Exp(arg), nil
+	default:
+		return 0, errors.New("unknown function: " + name)
+	}
 }
 
 func (p *mathParser) parseExpr() (float64, error) {
@@ -563,48 +715,6 @@ var raidBosses = []raidBoss{
 	{Name: "Social Anxiety Dragon", Emoji: "\U0001F409", MaxHP: 5500, Description: "Guards social skills treasure", Loot: []string{"Conversation Starter Kit", "Confidence Amulet", "Small Talk Guide"}},
 }
 
-// AI Chat helper
-func getAIChatResponse(userID, username, message string, isDM bool) (string, error) {
-	aiServiceURL := os.Getenv("AI_CHAT_URL")
-	if aiServiceURL == "" {
-		aiServiceURL = "http://localhost:5000"
-	}
-
-	requestBody, _ := json.Marshal(map[string]interface{}{
-		"user_id":  userID,
-		"username": username,
-		"message":  message,
-		"is_dm":    isDM,
-	})
-
-	resp, err := http.Post(aiServiceURL+"/chat", "application/json", bytes.NewBuffer(requestBody))
-	if err != nil {
-		return "", err
-	}
-	defer resp.Body.Close()
-
-	if resp.StatusCode != 200 {
-		// Try to get fallback message
-		var errorResp map[string]interface{}
-		if err := json.NewDecoder(resp.Body).Decode(&errorResp); err == nil {
-			if fallback, ok := errorResp["fallback"].(string); ok {
-				return fallback, nil
-			}
-		}
-		return "", fmt.Errorf("AI service returned status %d", resp.StatusCode)
-	}
-
-	var result map[string]interface{}
-	if err := json.NewDecoder(resp.Body).Decode(&result); err != nil {
-		return "", err
-	}
-
-	if response, ok := result["response"].(string); ok {
-		return response, nil
-	}
-
-	return "", fmt.Errorf("invalid response format")
-}
 
 var lootTables = map[string]lootTable{
 	"common":    {Name: "Common", Emoji: "\u26AA", Items: []string{"Broken Pencil", "Old Receipt", "Bottle Cap"}},
@@ -614,4 +724,132 @@ var lootTables = map[string]lootTable{
 	"legendary": {Name: "Legendary", Emoji: "\U0001F7E1", Items: []string{"Extra Day Weekend", "Unlimited Garlic Bread", "Infinite Battery Life"}},
 	"cosmic":    {Name: "Cosmic", Emoji: "\U0001F30C", Items: []string{"Pause Time", "World Peace Token", "Respec Button for Life Choices"}},
 	"cursed":    {Name: "Cursed", Emoji: "\U0001F480", Items: []string{"Wet Socks (Permanent)", "Eternal Loading Screen", "Unstoppable Hiccups"}},
+}
+
+// Tag game helper functions
+func generateTagBoard() [][]string {
+	board := make([][]string, 5)
+	for i := range board {
+		board[i] = make([]string, 5)
+		for j := range board[i] {
+			board[i][j] = "⬜"
+		}
+	}
+
+	// Place random obstacles (8 total, avoid start positions)
+	obstacles := 0
+	for obstacles < 8 {
+		x, y := rand.Intn(5), rand.Intn(5)
+		if (x == 0 && y == 0) || (x == 4 && y == 4) {
+			continue // Don't block spawns
+		}
+		if board[y][x] == "⬜" {
+			board[y][x] = "⬛"
+			obstacles++
+		}
+	}
+
+	return board
+}
+
+func processTagMove(sess *tagSession, direction string) bool {
+	// Get current player's position
+	var x, y *int
+	if sess.CurrentTurn == 0 {
+		x, y = &sess.Player1X, &sess.Player1Y
+	} else {
+		x, y = &sess.Player2X, &sess.Player2Y
+	}
+
+	newX, newY := *x, *y
+
+	switch direction {
+	case "up":
+		newY--
+	case "down":
+		newY++
+	case "left":
+		newX--
+	case "right":
+		newX++
+	case "stay":
+		// No movement
+		return true
+	default:
+		return false
+	}
+
+	// Validate bounds
+	if newX < 0 || newX >= 5 || newY < 0 || newY >= 5 {
+		return false
+	}
+
+	// Check for wall
+	if sess.Board[newY][newX] == "⬛" {
+		return false
+	}
+
+	// Apply move
+	*x = newX
+	*y = newY
+
+	return true
+}
+
+func buildTagEmbed(sess *tagSession) *discordgo.MessageEmbed {
+	// Build board visualization
+	boardCopy := make([][]string, 5)
+	for i := range sess.Board {
+		boardCopy[i] = make([]string, 5)
+		copy(boardCopy[i], sess.Board[i])
+	}
+
+	// Place players
+	boardCopy[sess.Player1Y][sess.Player1X] = "🔵"
+	boardCopy[sess.Player2Y][sess.Player2X] = "🔴"
+
+	boardLines := []string{}
+	for _, row := range boardCopy {
+		boardLines = append(boardLines, strings.Join(row, ""))
+	}
+
+	currentPlayer := sess.Player1Name
+	if sess.CurrentTurn == 1 {
+		currentPlayer = sess.Player2Name
+	}
+
+	embed := &discordgo.MessageEmbed{
+		Title:       "🏃 Tag Game",
+		Description: strings.Join(boardLines, "\n"),
+		Color:       ColorPurple,
+		Fields: []*discordgo.MessageEmbedField{
+			{Name: "Current Turn", Value: currentPlayer, Inline: true},
+			{Name: "Moves", Value: fmt.Sprintf("%d/%d", sess.Moves, sess.MaxMoves), Inline: true},
+			{Name: "Players", Value: fmt.Sprintf("🔵 %s\n🔴 %s", sess.Player1Name, sess.Player2Name), Inline: false},
+		},
+	}
+
+	return embed
+}
+
+func buildTagButtons(sessionID string) []discordgo.MessageComponent {
+	return []discordgo.MessageComponent{
+		discordgo.ActionsRow{
+			Components: []discordgo.MessageComponent{
+				discordgo.Button{Label: "⬆️", Style: discordgo.PrimaryButton, CustomID: fmt.Sprintf("tag_up_%s", sessionID)},
+			},
+		},
+		discordgo.ActionsRow{
+			Components: []discordgo.MessageComponent{
+				discordgo.Button{Label: "⬅️", Style: discordgo.PrimaryButton, CustomID: fmt.Sprintf("tag_left_%s", sessionID)},
+				discordgo.Button{Label: "Stay", Style: discordgo.SecondaryButton, CustomID: fmt.Sprintf("tag_stay_%s", sessionID)},
+				discordgo.Button{Label: "➡️", Style: discordgo.PrimaryButton, CustomID: fmt.Sprintf("tag_right_%s", sessionID)},
+			},
+		},
+		discordgo.ActionsRow{
+			Components: []discordgo.MessageComponent{
+				discordgo.Button{Label: "⬇️", Style: discordgo.PrimaryButton, CustomID: fmt.Sprintf("tag_down_%s", sessionID)},
+			},
+		},
+	}
 }

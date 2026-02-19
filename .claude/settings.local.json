@@ -14,7 +14,8 @@
       "Bash(go build:*)",
       "Bash(go mod tidy:*)",
       "Bash(npm run build:go:*)",
-      "Bash(pip install:*)"
+      "Bash(pip install:*)",
+      "Bash(go run:*)"
     ]
   }
 }

@@ -81,7 +81,11 @@ func main() {
 	if err != nil {
 		log.Fatalf("create session: %v", err)
 	}
-	s.Identify.Intents = discordgo.IntentsGuilds | discordgo.IntentsGuildMessages | discordgo.IntentsMessageContent
+	s.Identify.Intents = discordgo.IntentsGuilds |
+		discordgo.IntentsGuildMessages |
+		discordgo.IntentsMessageContent |
+		discordgo.IntentsDirectMessages |
+		discordgo.IntentsDirectMessageTyping
 
 	s.AddHandler(func(_ *discordgo.Session, r *discordgo.Ready) {
 		log.Printf("Go bot ready as %s", r.User.Username)
@@ -142,14 +146,16 @@ func handleCommand(s *discordgo.Session, i *discordgo.InteractionCreate) {
 		handleInteractiveFun(s, i)
 	case "joke", "meme", "trivia", "trivia-leaderboard":
 		handleAPIFun(s, i)
-	case "battle", "daily", "bossraid", "quote", "quest", "loot":
+	case "battle", "daily", "bossraid", "quote", "quest", "loot", "tag":
 		handleGameFun(s, i)
 	case "ping", "help", "avatar", "userinfo", "serverinfo", "channel-info", "role-info", "stats":
 		handleInfoUtility(s, i)
-	case "calc", "translate", "poll", "timer":
+	case "calc", "translate", "poll", "timer", "convert":
 		handleToolUtility(s, i)
 	case "remind", "reminders", "afk", "clear-my-data":
 		handleDataUtility(s, i)
+	case "shop", "inventory", "balance", "trade", "economy-admin":
+		handleEconomyUtility(s, i)
 	default:
 		respondText(s, i, fmt.Sprintf("/%s is implemented in Go.", name))
 	}
