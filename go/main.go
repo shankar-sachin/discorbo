@@ -148,6 +148,12 @@ func handleCommand(s *discordgo.Session, i *discordgo.InteractionCreate) {
 		handleAPIFun(s, i)
 	case "battle", "daily", "bossraid", "quote", "quest", "loot", "tag":
 		handleGameFun(s, i)
+	case "blackjack", "slots", "roulette", "russian-roulette", "war":
+		handleCasinoGames(s, i)
+	case "poker", "go-fish", "snap":
+		handleCardGames(s, i)
+	case "2048", "highlow":
+		handlePuzzleGames(s, i)
 	case "ping", "help", "avatar", "userinfo", "serverinfo", "channel-info", "role-info", "stats":
 		handleInfoUtility(s, i)
 	case "calc", "translate", "poll", "timer", "convert":
@@ -156,6 +162,14 @@ func handleCommand(s *discordgo.Session, i *discordgo.InteractionCreate) {
 		handleDataUtility(s, i)
 	case "shop", "inventory", "balance", "trade", "economy-admin":
 		handleEconomyUtility(s, i)
+	case "kick", "ban", "unban", "timeout", "warn", "warnings", "clearwarnings":
+		handleCoreModeration(s, i)
+	case "purge", "lock", "unlock", "slowmode":
+		handleMessageModeration(s, i)
+	case "modlog", "automod":
+		handleModConfig(s, i)
+	case "nick", "role", "announce":
+		handleServerUtility(s, i)
 	default:
 		respondText(s, i, fmt.Sprintf("/%s is implemented in Go.", name))
 	}

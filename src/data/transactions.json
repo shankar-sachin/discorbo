@@ -1,0 +1,18 @@
+[
+  {
+    "userId": "1070486338643706017",
+    "type": "admin_grant",
+    "amount": 67,
+    "grantedBy": "1070486338643706017",
+    "reason": "Admin grant",
+    "timestamp": 1771640674074
+  },
+  {
+    "userId": "1070486338643706017",
+    "type": "admin_grant",
+    "amount": 67000000,
+    "grantedBy": "1070486338643706017",
+    "reason": "Admin grant",
+    "timestamp": 1771640715934
+  }
+]

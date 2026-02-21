@@ -418,6 +418,92 @@ section {
     color: var(--text-muted);
 }
 
+.feature-card.featured {
+    background: linear-gradient(135deg, rgba(102, 126, 234, 0.1) 0%, rgba(118, 75, 162, 0.1) 100%);
+    border: 2px solid rgba(102, 126, 234, 0.3);
+}
+
+/* Moderation Section */
+.moderation {
+    background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+    padding: 100px 0;
+    color: white;
+}
+
+.moderation .section-title,
+.moderation .section-subtitle {
+    color: white;
+}
+
+.mod-grid {
+    display: grid;
+    grid-template-columns: repeat(auto-fit, minmax(300px, 1fr));
+    gap: 30px;
+    margin-top: 50px;
+}
+
+.mod-feature {
+    background: rgba(255, 255, 255, 0.1);
+    padding: 30px;
+    border-radius: 15px;
+    backdrop-filter: blur(10px);
+    border: 1px solid rgba(255, 255, 255, 0.2);
+    transition: all 0.3s ease;
+}
+
+.mod-feature:hover {
+    background: rgba(255, 255, 255, 0.15);
+    transform: translateY(-5px);
+    box-shadow: 0 10px 30px rgba(0, 0, 0, 0.2);
+}
+
+.mod-icon {
+    font-size: 2.5rem;
+    margin-bottom: 15px;
+}
+
+.mod-feature h3 {
+    font-size: 1.5em;
+    margin-bottom: 10px;
+    color: white;
+}
+
+.mod-feature p {
+    color: rgba(255, 255, 255, 0.9);
+    line-height: 1.6;
+}
+
+.mod-highlight {
+    background: rgba(255, 255, 255, 0.15);
+    padding: 40px;
+    border-radius: 20px;
+    margin-top: 50px;
+    text-align: center;
+    border: 2px solid rgba(255, 255, 255, 0.3);
+}
+
+.mod-highlight h3 {
+    font-size: 2rem;
+    margin-bottom: 25px;
+    color: white;
+}
+
+.mod-features-list {
+    display: flex;
+    flex-wrap: wrap;
+    gap: 15px;
+    justify-content: center;
+}
+
+.mod-badge {
+    background: rgba(255, 255, 255, 0.2);
+    padding: 12px 24px;
+    border-radius: 25px;
+    font-weight: 600;
+    border: 1px solid rgba(255, 255, 255, 0.3);
+    backdrop-filter: blur(5px);
+}
+
 /* Commands Section */
 .commands {
     background: var(--dark-alt);
@@ -434,6 +520,11 @@ section {
     background: rgba(255, 255, 255, 0.05);
     padding: 2rem;
     border-radius: 12px;
+}
+
+.command-category.highlight {
+    background: linear-gradient(135deg, rgba(102, 126, 234, 0.15) 0%, rgba(118, 75, 162, 0.15) 100%);
+    border: 2px solid rgba(102, 126, 234, 0.4);
 }
 
 .category-header {
@@ -647,6 +738,14 @@ section {
 
     .about-image {
         display: none;
+    }
+
+    .mod-grid {
+        grid-template-columns: 1fr;
+    }
+
+    .mod-features-list {
+        justify-content: flex-start;
     }
 
     .commands-grid {

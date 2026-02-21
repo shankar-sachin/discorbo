@@ -20,12 +20,40 @@ func handleComponent(s *discordgo.Session, i *discordgo.InteractionCreate) {
 		handleTriviaComponent(s, i)
 		return
 	}
+	if strings.HasPrefix(data.CustomID, "poll_") {
+		handlePollComponent(s, i)
+		return
+	}
 	if strings.HasPrefix(data.CustomID, "trade_") {
 		handleTradeComponent(s, i)
 		return
 	}
 	if strings.HasPrefix(data.CustomID, "tag_") {
 		handleTagComponent(s, i)
+		return
+	}
+	if strings.HasPrefix(data.CustomID, "bj_") {
+		handleBJComponent(s, i)
+		return
+	}
+	if strings.HasPrefix(data.CustomID, "poker_") {
+		handlePokerComponent(s, i)
+		return
+	}
+	if strings.HasPrefix(data.CustomID, "fish_") {
+		handleFishComponent(s, i)
+		return
+	}
+	if strings.HasPrefix(data.CustomID, "snap_") {
+		handleSnapComponent(s, i)
+		return
+	}
+	if strings.HasPrefix(data.CustomID, "g2048_") {
+		handle2048Component(s, i)
+		return
+	}
+	if strings.HasPrefix(data.CustomID, "hl_") {
+		handleHLComponent(s, i)
 		return
 	}
 	if !strings.HasPrefix(data.CustomID, "maze_") {
@@ -73,6 +101,74 @@ func handleComponent(s *discordgo.Session, i *discordgo.InteractionCreate) {
 		resp.Data.Components = mazeComponents()
 	}
 	_ = s.InteractionRespond(i.Interaction, resp)
+}
+
+func handlePollComponent(s *discordgo.Session, i *discordgo.InteractionCreate) {
+	user := interactionUser(i)
+	if user == nil {
+		_ = s.InteractionRespond(i.Interaction, &discordgo.InteractionResponse{Type: discordgo.InteractionResponseDeferredMessageUpdate})
+		return
+	}
+
+	// CustomID format: poll_vote_<pollID>_<optionIndex>
+	parts := strings.Split(i.MessageComponentData().CustomID, "_")
+	if len(parts) < 4 {
+		_ = s.InteractionRespond(i.Interaction, &discordgo.InteractionResponse{Type: discordgo.InteractionResponseDeferredMessageUpdate})
+		return
+	}
+
+	// Extract option index (last part)
+	optIdx, err := strconv.Atoi(parts[len(parts)-1])
+	if err != nil {
+		_ = s.InteractionRespond(i.Interaction, &discordgo.InteractionResponse{Type: discordgo.InteractionResponseDeferredMessageUpdate})
+		return
+	}
+
+	pollMu.Lock()
+	sess, ok := pollSessions[i.Message.ID]
+	if !ok || time.Now().UnixMilli() > sess.ExpiresAt {
+		pollMu.Unlock()
+		_ = s.InteractionRespond(i.Interaction, &discordgo.InteractionResponse{
+			Type: discordgo.InteractionResponseChannelMessageWithSource,
+			Data: &discordgo.InteractionResponseData{Content: "This poll has expired.", Flags: discordgo.MessageFlagsEphemeral},
+		})
+		return
+	}
+
+	// Check double voting
+	if prevIdx, voted := sess.Voters[user.ID]; voted {
+		pollMu.Unlock()
+		_ = s.InteractionRespond(i.Interaction, &discordgo.InteractionResponse{
+			Type: discordgo.InteractionResponseChannelMessageWithSource,
+			Data: &discordgo.InteractionResponseData{
+				Content: fmt.Sprintf("You already voted for option %d. You can only vote once!", prevIdx+1),
+				Flags:   discordgo.MessageFlagsEphemeral,
+			},
+		})
+		return
+	}
+
+	if optIdx < 0 || optIdx >= len(sess.Votes) {
+		pollMu.Unlock()
+		_ = s.InteractionRespond(i.Interaction, &discordgo.InteractionResponse{Type: discordgo.InteractionResponseDeferredMessageUpdate})
+		return
+	}
+
+	sess.Votes[optIdx]++
+	sess.Voters[user.ID] = optIdx
+	pollMu.Unlock()
+
+	// Look up creator username
+	creator := "unknown"
+	if u, err := s.User(sess.CreatorID); err == nil && u != nil {
+		creator = u.Username
+	}
+
+	embed := buildPollEmbedFromSession(sess, creator)
+	_ = s.InteractionRespond(i.Interaction, &discordgo.InteractionResponse{
+		Type: discordgo.InteractionResponseUpdateMessage,
+		Data: &discordgo.InteractionResponseData{Embeds: []*discordgo.MessageEmbed{embed}},
+	})
 }
 
 func handleTriviaComponent(s *discordgo.Session, i *discordgo.InteractionCreate) {
@@ -149,6 +245,9 @@ func handleMessageCreate(s *discordgo.Session, m *discordgo.MessageCreate) {
 		return
 	}
 
+	// Check auto-moderation rules
+	CheckAutoMod(s, m)
+
 	// Check for DMs or bot mentions and handle with AI
 	isDM := m.GuildID == ""
 	isMention := false
@@ -170,10 +269,15 @@ func handleMessageCreate(s *discordgo.Session, m *discordgo.MessageCreate) {
 		return
 	}
 	changed := false
-	if _, ok := afkMap[m.Author.ID]; ok {
+	if st, ok := afkMap[m.Author.ID]; ok {
 		delete(afkMap, m.Author.ID)
 		changed = true
-		_, _ = s.ChannelMessageSend(m.ChannelID, fmt.Sprintf("<@%s> is no longer AFK.", m.Author.ID))
+		delta := time.Since(time.UnixMilli(st.Timestamp)).Round(time.Second)
+		embed := createSuccessEmbed("👋 Welcome Back!", fmt.Sprintf("<@%s> is no longer AFK.", m.Author.ID))
+		embed.Fields = []*discordgo.MessageEmbedField{
+			{Name: "AFK Duration", Value: delta.String(), Inline: true},
+		}
+		_, _ = s.ChannelMessageSendEmbed(m.ChannelID, embed)
 	}
 	for _, u := range m.Mentions {
 		if u == nil {
@@ -181,7 +285,11 @@ func handleMessageCreate(s *discordgo.Session, m *discordgo.MessageCreate) {
 		}
 		if st, ok := afkMap[u.ID]; ok {
 			delta := time.Since(time.UnixMilli(st.Timestamp)).Round(time.Minute)
-			_, _ = s.ChannelMessageSend(m.ChannelID, fmt.Sprintf("%s is AFK (%s ago): %s", u.Username, delta.String(), st.Reason))
+			embed := createWarningEmbed(fmt.Sprintf("💤 %s is AFK", u.Username), st.Reason)
+			embed.Fields = []*discordgo.MessageEmbedField{
+				{Name: "AFK Since", Value: delta.String() + " ago", Inline: true},
+			}
+			_, _ = s.ChannelMessageSendEmbed(m.ChannelID, embed)
 		}
 	}
 	if changed {
@@ -253,10 +361,120 @@ func handleTradeComponent(s *discordgo.Session, i *discordgo.InteractionCreate) 
 			return
 		}
 
-		// Trade accepted - show trading UI (simplified version without buttons for now)
+		// Capture session info before unlocking
+		initiatorID := sess.InitiatorID
+		targetID := sess.TargetID
+		initOffer := sess.InitOffer
+		targetOffer := sess.TargetOffer
+		tradeID := sess.TradeID
+		delete(tradeSessions, i.Message.ID)
 		tradeMu.Unlock()
-		embed := createSuccessEmbed("Trade Accepted",
-			"Trade feature is under development. You can manually exchange items using /shop and direct messages for now.")
+
+		// Load economy data
+		economyUsers := map[string]economyUser{}
+		_ = readData("economy-users.json", &economyUsers)
+
+		initUser := economyUsers[initiatorID]
+		if initUser.Inventory == nil {
+			initUser.Inventory = []inventoryItem{}
+		}
+		targUser := economyUsers[targetID]
+		if targUser.Inventory == nil {
+			targUser.Inventory = []inventoryItem{}
+		}
+
+		// Transfer coins
+		initUser.Coins -= initOffer.Coins
+		initUser.Coins += targetOffer.Coins
+		targUser.Coins -= targetOffer.Coins
+		targUser.Coins += initOffer.Coins
+
+		// Transfer items from initiator to target
+		for _, itemID := range initOffer.ItemIDs {
+			// Remove from initiator
+			for idx, inv := range initUser.Inventory {
+				if inv.ItemID == itemID && inv.Quantity > 0 {
+					initUser.Inventory[idx].Quantity--
+					if initUser.Inventory[idx].Quantity == 0 {
+						initUser.Inventory = append(initUser.Inventory[:idx], initUser.Inventory[idx+1:]...)
+					}
+					break
+				}
+			}
+			// Add to target
+			found := false
+			for idx, inv := range targUser.Inventory {
+				if inv.ItemID == itemID {
+					targUser.Inventory[idx].Quantity++
+					found = true
+					break
+				}
+			}
+			if !found {
+				targUser.Inventory = append(targUser.Inventory, inventoryItem{ItemID: itemID, Quantity: 1, PurchasedAt: time.Now().Unix()})
+			}
+		}
+
+		// Transfer items from target to initiator
+		for _, itemID := range targetOffer.ItemIDs {
+			for idx, inv := range targUser.Inventory {
+				if inv.ItemID == itemID && inv.Quantity > 0 {
+					targUser.Inventory[idx].Quantity--
+					if targUser.Inventory[idx].Quantity == 0 {
+						targUser.Inventory = append(targUser.Inventory[:idx], targUser.Inventory[idx+1:]...)
+					}
+					break
+				}
+			}
+			found := false
+			for idx, inv := range initUser.Inventory {
+				if inv.ItemID == itemID {
+					initUser.Inventory[idx].Quantity++
+					found = true
+					break
+				}
+			}
+			if !found {
+				initUser.Inventory = append(initUser.Inventory, inventoryItem{ItemID: itemID, Quantity: 1, PurchasedAt: time.Now().Unix()})
+			}
+		}
+
+		// Record trade history
+		now := time.Now().Unix()
+		initUser.TradeHistory = append(initUser.TradeHistory, tradeRecord{
+			TradeID:   tradeID,
+			OtherUser: targetID,
+			GaveCoins: initOffer.Coins,
+			GaveItems: initOffer.ItemIDs,
+			GotCoins:  targetOffer.Coins,
+			GotItems:  targetOffer.ItemIDs,
+			Timestamp: now,
+		})
+		targUser.TradeHistory = append(targUser.TradeHistory, tradeRecord{
+			TradeID:   tradeID,
+			OtherUser: initiatorID,
+			GaveCoins: targetOffer.Coins,
+			GaveItems: targetOffer.ItemIDs,
+			GotCoins:  initOffer.Coins,
+			GotItems:  initOffer.ItemIDs,
+			Timestamp: now,
+		})
+
+		economyUsers[initiatorID] = initUser
+		economyUsers[targetID] = targUser
+		_ = writeData("economy-users.json", economyUsers)
+
+		// Build summary
+		summaryLines := fmt.Sprintf("<@%s> gave: **%d coins**", initiatorID, initOffer.Coins)
+		if len(initOffer.ItemIDs) > 0 {
+			summaryLines += fmt.Sprintf(" + %d item(s)", len(initOffer.ItemIDs))
+		}
+		summaryLines += fmt.Sprintf("\n<@%s> gave: **%d coins**", targetID, targetOffer.Coins)
+		if len(targetOffer.ItemIDs) > 0 {
+			summaryLines += fmt.Sprintf(" + %d item(s)", len(targetOffer.ItemIDs))
+		}
+
+		embed := createSuccessEmbed("✅ Trade Complete!", summaryLines)
 		_ = s.InteractionRespond(i.Interaction, &discordgo.InteractionResponse{
 			Type: discordgo.InteractionResponseUpdateMessage,
 			Data: &discordgo.InteractionResponseData{Embeds: []*discordgo.MessageEmbed{embed}, Components: []discordgo.MessageComponent{}},

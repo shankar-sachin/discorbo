@@ -97,49 +97,74 @@ func handleDataUtility(s *discordgo.Session, i *discordgo.InteractionCreate) {
 
 func handleHelp(s *discordgo.Session, i *discordgo.InteractionCreate, opts []*discordgo.ApplicationCommandInteractionDataOption) {
 	category := strings.ToLower(optionString(opts, "category", "all"))
-	all := allCommands()
+
 	funSet := map[string]bool{}
 	for _, c := range funCommands() {
 		funSet[c.Name] = true
 	}
+	modSet := map[string]bool{}
+	for _, c := range moderationCommands() {
+		modSet[c.Name] = true
+	}
 
 	funLines := []string{}
 	utilLines := []string{}
-	for _, c := range all {
+	modLines := []string{}
+	for _, c := range allCommands() {
 		line := fmt.Sprintf("`/%s` - %s", c.Name, c.Description)
 		if funSet[c.Name] {
 			funLines = append(funLines, line)
+		} else if modSet[c.Name] {
+			modLines = append(modLines, line)
 		} else {
 			utilLines = append(utilLines, line)
 		}
 	}
 	sort.Strings(funLines)
 	sort.Strings(utilLines)
+	sort.Strings(modLines)
 
 	embed := &discordgo.MessageEmbed{
-		Title:       "Discorbo Commands",
-		Description: "Go runtime command list",
-		Color:       0x5865F2,
+		Title:       "🤖 Discorbo Commands",
+		Description: fmt.Sprintf("**%d total commands** across 3 categories", len(funLines)+len(utilLines)+len(modLines)),
+		Color:       ColorBlue,
+		Timestamp:   time.Now().Format(time.RFC3339),
 	}
+
+	truncate := func(lines []string) string {
+		v := strings.Join(lines, "\n")
+		if len(v) > 1024 {
+			v = v[:1021] + "..."
+		}
+		return v
+	}
+
 	if category == "all" || category == "fun" {
 		value := "No fun commands found."
 		if len(funLines) > 0 {
-			value = strings.Join(funLines, "\n")
-			if len(value) > 1024 {
-				value = value[:1021] + "..."
-			}
+			value = truncate(funLines)
 		}
-		embed.Fields = append(embed.Fields, &discordgo.MessageEmbedField{Name: "Fun & Games", Value: value})
+		embed.Fields = append(embed.Fields, &discordgo.MessageEmbedField{
+			Name: fmt.Sprintf("🎮 Fun & Games (%d)", len(funLines)), Value: value,
+		})
 	}
 	if category == "all" || category == "utility" {
 		value := "No utility commands found."
 		if len(utilLines) > 0 {
-			value = strings.Join(utilLines, "\n")
-			if len(value) > 1024 {
-				value = value[:1021] + "..."
-			}
+			value = truncate(utilLines)
 		}
-		embed.Fields = append(embed.Fields, &discordgo.MessageEmbedField{Name: "Utility", Value: value})
+		embed.Fields = append(embed.Fields, &discordgo.MessageEmbedField{
+			Name: fmt.Sprintf("🛠️ Utility (%d)", len(utilLines)), Value: value,
+		})
+	}
+	if category == "all" || category == "moderation" {
+		value := "No moderation commands found."
+		if len(modLines) > 0 {
+			value = truncate(modLines)
+		}
+		embed.Fields = append(embed.Fields, &discordgo.MessageEmbedField{
+			Name: fmt.Sprintf("🛡️ Moderation (%d)", len(modLines)), Value: value,
+		})
 	}
 	respondEmbed(s, i, embed)
 }
@@ -371,7 +396,7 @@ func handleTranslate(s *discordgo.Session, i *discordgo.InteractionCreate, opts 
 	toLang := strings.TrimSpace(optionString(opts, "to", ""))
 	fromLang := strings.TrimSpace(optionString(opts, "from", "auto"))
 	if text == "" || toLang == "" {
-		editDeferredText(s, i, "Text and target language are required.")
+		editDeferredEmbed(s, i, createErrorEmbed("Missing Input", "Text and target language are required."), nil)
 		return
 	}
 	payload := map[string]string{
@@ -386,7 +411,7 @@ func handleTranslate(s *discordgo.Session, i *discordgo.InteractionCreate, opts 
 	client := http.Client{Timeout: 7 * time.Second}
 	resp, err := client.Do(req)
 	if err != nil {
-		editDeferredText(s, i, "Translation service is unavailable.")
+		editDeferredEmbed(s, i, createErrorEmbed("Translation Unavailable", "The translation service is currently unavailable. Try again later."), nil)
 		return
 	}
 	defer resp.Body.Close()
@@ -398,53 +423,172 @@ func handleTranslate(s *discordgo.Session, i *discordgo.InteractionCreate, opts 
 		} `json:"detectedLanguage"`
 	}
 	if err := json.Unmarshal(body, &out); err != nil || out.TranslatedText == "" {
-		editDeferredText(s, i, "Failed to translate text.")
+		editDeferredEmbed(s, i, createErrorEmbed("Translation Failed", "Could not translate the text. The translation service may be unavailable."), nil)
 		return
 	}
 	detected := out.DetectedLanguage.Language
 	if detected == "" {
 		detected = fromLang
 	}
-	editDeferredText(s, i, fmt.Sprintf("Original (%s): %s\n\nTranslated (%s): %s", strings.ToUpper(detected), text, strings.ToUpper(toLang), out.TranslatedText))
+	embed := createInfoEmbed("🌐 Translation", "")
+	embed.Fields = []*discordgo.MessageEmbedField{
+		{Name: fmt.Sprintf("Original (%s)", strings.ToUpper(detected)), Value: text, Inline: false},
+		{Name: fmt.Sprintf("Translated (%s)", strings.ToUpper(toLang)), Value: out.TranslatedText, Inline: false},
+	}
+	editDeferredEmbed(s, i, embed, nil)
 }
 
 func handlePoll(s *discordgo.Session, i *discordgo.InteractionCreate, opts []*discordgo.ApplicationCommandInteractionDataOption) {
 	question := optionString(opts, "question", "")
 	if question == "" {
-		respondText(s, i, "Question is required.")
+		respondEmbed(s, i, createErrorEmbed("Poll Error", "Question is required."))
 		return
 	}
 	numberEmojis := []string{"1️⃣", "2️⃣", "3️⃣", "4️⃣", "5️⃣", "6️⃣", "7️⃣", "8️⃣", "9️⃣", "🔟"}
-	lines := []string{}
+	options := []string{}
 	for idx := 1; idx <= 10; idx++ {
 		key := fmt.Sprintf("option%d", idx)
 		val := strings.TrimSpace(optionString(opts, key, ""))
 		if val != "" {
-			lines = append(lines, fmt.Sprintf("%s %s", numberEmojis[idx-1], val))
+			options = append(options, val)
 		}
 	}
-	if len(lines) < 2 {
-		respondText(s, i, "At least two options are required.")
+	if len(options) < 2 {
+		respondEmbed(s, i, createErrorEmbed("Poll Error", "At least two options are required."))
 		return
 	}
 	user := interactionUser(i)
-	author := "unknown"
+	creator := "unknown"
 	if user != nil {
-		author = user.String()
+		creator = user.Username
 	}
-	embed := &discordgo.MessageEmbed{
-		Title:       question,
-		Description: strings.Join(lines, "\n"),
-		Color:       0x5865F2,
-		Footer:      &discordgo.MessageEmbedFooter{Text: "Poll by " + author},
+
+	// Build embed showing options with 0 votes
+	buildPollEmbed := func(question string, options []string, votes []int, totalVotes int) *discordgo.MessageEmbed {
+		fields := make([]*discordgo.MessageEmbedField, 0, len(options))
+		for idx, opt := range options {
+			var barStr string
+			v := 0
+			if idx < len(votes) {
+				v = votes[idx]
+			}
+			pct := 0.0
+			if totalVotes > 0 {
+				pct = float64(v) / float64(totalVotes) * 100
+			}
+			filled := int(pct / 10)
+			barStr = strings.Repeat("█", filled) + strings.Repeat("░", 10-filled)
+			fields = append(fields, &discordgo.MessageEmbedField{
+				Name:   fmt.Sprintf("%s %s", numberEmojis[idx], opt),
+				Value:  fmt.Sprintf("`%s` %d votes (%.0f%%)", barStr, v, pct),
+				Inline: false,
+			})
+		}
+		embed := &discordgo.MessageEmbed{
+			Title:     "📊 " + question,
+			Color:     ColorBlue,
+			Fields:    fields,
+			Timestamp: time.Now().Format(time.RFC3339),
+			Footer:    &discordgo.MessageEmbedFooter{Text: fmt.Sprintf("Poll by %s • %d total votes | Discorbo", creator, totalVotes)},
+		}
+		return embed
 	}
+
+	votes := make([]int, len(options))
+	embed := buildPollEmbed(question, options, votes, 0)
+
+	// Add vote buttons for up to 4 options
+	var components []discordgo.MessageComponent
+	if len(options) <= 4 {
+		pollID := fmt.Sprintf("%s_%d", user.ID, time.Now().UnixMilli())
+		btns := []discordgo.MessageComponent{}
+		for idx, opt := range options {
+			label := opt
+			if len(label) > 20 {
+				label = label[:17] + "..."
+			}
+			btns = append(btns, discordgo.Button{
+				Label:    fmt.Sprintf("%s %s", numberEmojis[idx], label),
+				Style:    discordgo.SecondaryButton,
+				CustomID: fmt.Sprintf("poll_vote_%s_%d", pollID, idx),
+			})
+		}
+		components = []discordgo.MessageComponent{discordgo.ActionsRow{Components: btns}}
+
+		// Store session - will be keyed by message ID after followup
+		// Use deferred response to get message ID
+		_ = s.InteractionRespond(i.Interaction, &discordgo.InteractionResponse{
+			Type: discordgo.InteractionResponseDeferredChannelMessageWithSource,
+		})
+		msg, err := s.FollowupMessageCreate(i.Interaction, true, &discordgo.WebhookParams{
+			Embeds:     []*discordgo.MessageEmbed{embed},
+			Components: components,
+		})
+		if err != nil {
+			return
+		}
+
+		pollMu.Lock()
+		pollSessions[msg.ID] = &pollSession{
+			Question:  question,
+			Options:   options,
+			Votes:     votes,
+			Voters:    map[string]int{},
+			CreatorID: user.ID,
+			ExpiresAt: time.Now().Add(24 * time.Hour).UnixMilli(),
+		}
+		pollMu.Unlock()
+
+		// Store the buildPollEmbed function data for updates - pass creator name
+		// Clean up after 24 hours
+		go func(msgID string) {
+			time.Sleep(24 * time.Hour)
+			pollMu.Lock()
+			delete(pollSessions, msgID)
+			pollMu.Unlock()
+		}(msg.ID)
+		return
+	}
+
+	// More than 4 options: just show embed without buttons
 	respondEmbed(s, i, embed)
+}
+
+// pollVoteBarStr builds a vote bar for use in poll embed updates (shared helper)
+func buildPollEmbedFromSession(sess *pollSession, creator string) *discordgo.MessageEmbed {
+	numberEmojis := []string{"1️⃣", "2️⃣", "3️⃣", "4️⃣", "5️⃣", "6️⃣", "7️⃣", "8️⃣", "9️⃣", "🔟"}
+	totalVotes := 0
+	for _, v := range sess.Votes {
+		totalVotes += v
+	}
+	fields := make([]*discordgo.MessageEmbedField, 0, len(sess.Options))
+	for idx, opt := range sess.Options {
+		v := sess.Votes[idx]
+		pct := 0.0
+		if totalVotes > 0 {
+			pct = float64(v) / float64(totalVotes) * 100
+		}
+		filled := int(pct / 10)
+		barStr := strings.Repeat("█", filled) + strings.Repeat("░", 10-filled)
+		fields = append(fields, &discordgo.MessageEmbedField{
+			Name:   fmt.Sprintf("%s %s", numberEmojis[idx], opt),
+			Value:  fmt.Sprintf("`%s` %d votes (%.0f%%)", barStr, v, pct),
+			Inline: false,
+		})
+	}
+	return &discordgo.MessageEmbed{
+		Title:     "📊 " + sess.Question,
+		Color:     ColorBlue,
+		Fields:    fields,
+		Timestamp: time.Now().Format(time.RFC3339),
+		Footer:    &discordgo.MessageEmbedFooter{Text: fmt.Sprintf("Poll by %s • %d total votes | Discorbo", creator, totalVotes)},
+	}
 }
 
 func handleTimer(s *discordgo.Session, i *discordgo.InteractionCreate, opts []*discordgo.ApplicationCommandInteractionDataOption) {
 	seconds := optionInt(opts, "seconds", 0)
 	if seconds < 1 || seconds > 300 {
-		respondText(s, i, "Seconds must be between 1 and 300.")
+		respondEmbed(s, i, createErrorEmbed("Invalid Duration", "Timer must be between **1** and **300** seconds."))
 		return
 	}
 	user := interactionUser(i)
@@ -453,36 +597,41 @@ func handleTimer(s *discordgo.Session, i *discordgo.InteractionCreate, opts []*d
 		mention = "<@" + user.ID + ">"
 	}
 	end := time.Now().Add(time.Duration(seconds) * time.Second)
-	respondText(s, i, fmt.Sprintf("Timer started. Ends <t:%d:R>.", end.Unix()))
+	embed := createInfoEmbed("⏱️ Timer Set", fmt.Sprintf("Your timer will go off <t:%d:R>.", end.Unix()))
+	embed.Fields = []*discordgo.MessageEmbedField{
+		{Name: "Duration", Value: fmt.Sprintf("%d seconds", seconds), Inline: true},
+		{Name: "Ends At", Value: fmt.Sprintf("<t:%d:T>", end.Unix()), Inline: true},
+	}
+	respondEmbed(s, i, embed)
 	go func(channelID string, duration int64, tag string) {
 		<-time.After(time.Duration(duration) * time.Second)
-		msg := "Timer complete!"
+		completeEmbed := createSuccessEmbed("⏱️ Timer Complete!", "Your timer has finished!")
 		if tag != "" {
-			msg = fmt.Sprintf("%s timer complete!", tag)
+			completeEmbed.Description = fmt.Sprintf("%s your timer has finished!", tag)
 		}
-		_, _ = s.ChannelMessageSend(channelID, msg)
+		_, _ = s.ChannelMessageSendEmbed(channelID, completeEmbed)
 	}(i.ChannelID, seconds, mention)
 }
 
 func handleRemind(s *discordgo.Session, i *discordgo.InteractionCreate, opts []*discordgo.ApplicationCommandInteractionDataOption) {
 	user := interactionUser(i)
 	if user == nil {
-		respondText(s, i, "Unable to identify user.")
+		respondEmbed(s, i, createErrorEmbed("Error", "Unable to identify user."))
 		return
 	}
 	timeText := strings.ToLower(strings.TrimSpace(optionString(opts, "time", "")))
 	message := strings.TrimSpace(optionString(opts, "message", ""))
 	if message == "" {
-		respondText(s, i, "Reminder message is required.")
+		respondEmbed(s, i, createErrorEmbed("Missing Input", "Reminder message is required."))
 		return
 	}
 	duration, ok := parseReminderDuration(timeText)
 	if !ok || duration <= 0 {
-		respondText(s, i, "Invalid time format. Use like `30s`, `5m`, `2h`, `1d`.")
+		respondEmbed(s, i, createErrorEmbed("Invalid Time", "Use formats like `30s`, `5m`, `2h`, `1d`."))
 		return
 	}
 	if duration > 30*24*time.Hour {
-		respondText(s, i, "Maximum reminder time is 30 days.")
+		respondEmbed(s, i, createErrorEmbed("Too Far", "Maximum reminder time is **30 days**."))
 		return
 	}
 
@@ -494,7 +643,7 @@ func handleRemind(s *discordgo.Session, i *discordgo.InteractionCreate, opts []*
 		}
 	}
 	if count >= 10 {
-		respondText(s, i, "You already have 10 active reminders.")
+		respondEmbed(s, i, createErrorEmbed("Too Many Reminders", "You already have **10 active reminders**. Clear some with `/reminders clear`."))
 		return
 	}
 	now := time.Now().UnixMilli()
@@ -507,7 +656,12 @@ func handleRemind(s *discordgo.Session, i *discordgo.InteractionCreate, opts []*
 	}
 	reminders = append(reminders, entry)
 	writeReminders(reminders)
-	respondText(s, i, fmt.Sprintf("Reminder set for <t:%d:R>.\nMessage: %s", entry.DueTime/1000, message))
+	embed := createSuccessEmbed("⏰ Reminder Set!", "")
+	embed.Fields = []*discordgo.MessageEmbedField{
+		{Name: "📝 Message", Value: message, Inline: false},
+		{Name: "⏰ Fires", Value: fmt.Sprintf("<t:%d:R> (<t:%d:T>)", entry.DueTime/1000, entry.DueTime/1000), Inline: false},
+	}
+	respondEmbed(s, i, embed)
 }
 
 func handleReminders(s *discordgo.Session, i *discordgo.InteractionCreate, opts []*discordgo.ApplicationCommandInteractionDataOption) {
@@ -532,14 +686,21 @@ func handleReminders(s *discordgo.Session, i *discordgo.InteractionCreate, opts 
 	switch sub {
 	case "list":
 		if len(userReminders) == 0 {
-			respondText(s, i, "No active reminders. Use `/remind` to add one.")
+			respondEmbed(s, i, createInfoEmbed("⏰ Your Reminders", "No active reminders. Use `/remind` to add one!"))
 			return
 		}
-		lines := make([]string, 0, len(userReminders))
+		fields := make([]*discordgo.MessageEmbedField, 0, len(userReminders))
 		for idx, r := range userReminders {
-			lines = append(lines, fmt.Sprintf("%d. %s (due <t:%d:R>)", idx+1, r.Message, r.DueTime/1000))
+			fields = append(fields, &discordgo.MessageEmbedField{
+				Name:   fmt.Sprintf("#%d", idx+1),
+				Value:  fmt.Sprintf("%s\n⏰ <t:%d:R>", r.Message, r.DueTime/1000),
+				Inline: false,
+			})
 		}
-		respondText(s, i, strings.Join(lines, "\n"))
+		embed := createInfoEmbed("⏰ Your Reminders", "")
+		embed.Fields = fields
+		embed.Footer = &discordgo.MessageEmbedFooter{Text: fmt.Sprintf("%d active reminders | Discorbo", len(userReminders))}
+		respondEmbed(s, i, embed)
 	case "clear":
 		kept := make([]reminderEntry, 0, len(reminders))
 		for _, r := range reminders {
@@ -548,11 +709,11 @@ func handleReminders(s *discordgo.Session, i *discordgo.InteractionCreate, opts 
 			}
 		}
 		writeReminders(kept)
-		respondText(s, i, fmt.Sprintf("Cleared %d reminders.", len(userReminders)))
+		respondEmbed(s, i, createSuccessEmbed("Reminders Cleared", fmt.Sprintf("Cleared **%d** reminder(s).", len(userReminders))))
 	case "remove":
 		num := int(optionInt(subOpts, "number", 0))
 		if num < 1 || num > len(userReminders) {
-			respondText(s, i, "Invalid reminder number.")
+			respondEmbed(s, i, createErrorEmbed("Invalid Number", fmt.Sprintf("Please enter a number between 1 and %d.", len(userReminders))))
 			return
 		}
 		target := userReminders[num-1]
@@ -566,16 +727,16 @@ func handleReminders(s *discordgo.Session, i *discordgo.InteractionCreate, opts 
 			kept = append(kept, r)
 		}
 		writeReminders(kept)
-		respondText(s, i, "Reminder removed.")
+		respondEmbed(s, i, createSuccessEmbed("Reminder Removed", fmt.Sprintf("Removed reminder #%d: *%s*", num, target.Message)))
 	default:
-		respondText(s, i, "Unknown subcommand.")
+		respondEmbed(s, i, createErrorEmbed("Unknown Subcommand", "Valid options: list, clear, remove"))
 	}
 }
 
 func handleAFK(s *discordgo.Session, i *discordgo.InteractionCreate, opts []*discordgo.ApplicationCommandInteractionDataOption) {
 	user := interactionUser(i)
 	if user == nil {
-		respondText(s, i, "Unable to identify user.")
+		respondEmbed(s, i, createErrorEmbed("Error", "Unable to identify user."))
 		return
 	}
 	reason := strings.TrimSpace(optionString(opts, "reason", "No reason provided"))
@@ -583,7 +744,13 @@ func handleAFK(s *discordgo.Session, i *discordgo.InteractionCreate, opts []*dis
 	_ = readData("afk-users.json", &afkMap)
 	afkMap[user.ID] = afkStatus{Reason: reason, Timestamp: time.Now().UnixMilli()}
 	_ = writeData("afk-users.json", afkMap)
-	respondText(s, i, fmt.Sprintf("AFK set: %s", reason))
+	embed := createInfoEmbed("💤 AFK Set", reason)
+	embed.Thumbnail = &discordgo.MessageEmbedThumbnail{URL: userAvatar(user)}
+	embed.Fields = []*discordgo.MessageEmbedField{
+		{Name: "Since", Value: fmt.Sprintf("<t:%d:T>", time.Now().Unix()), Inline: true},
+	}
+	embed.Footer = &discordgo.MessageEmbedFooter{Text: "Send a message to return from AFK | Discorbo"}
+	respondEmbed(s, i, embed)
 }
 
 func handleConvert(s *discordgo.Session, i *discordgo.InteractionCreate, opts []*discordgo.ApplicationCommandInteractionDataOption) {
@@ -675,7 +842,7 @@ func handleClearMyData(s *discordgo.Session, i *discordgo.InteractionCreate, opt
 		return
 	}
 	if !optionBool(opts, "confirm", false) {
-		respondText(s, i, "Set `confirm` to true to delete your data.")
+		respondEmbed(s, i, createWarningEmbed("Confirm Required", "Set the `confirm` option to `true` to permanently delete all your bot data.\n\n⚠️ **This action cannot be undone!**"))
 		return
 	}
 
@@ -708,5 +875,228 @@ func handleClearMyData(s *discordgo.Session, i *discordgo.InteractionCreate, opt
 		}
 	}
 	writeReminders(keptReminders)
-	respondText(s, i, "Your stored bot data has been deleted.")
+	embed := createSuccessEmbed("Data Deleted", "All your stored bot data has been permanently deleted.")
+	embed.Fields = []*discordgo.MessageEmbedField{
+		{Name: "Deleted", Value: "• Trivia scores\n• Daily rewards\n• Loot history\n• Quest data\n• Battle stats\n• AFK status\n• Maze records\n• Economy data\n• Reminders\n• Tag stats", Inline: false},
+	}
+	respondEmbed(s, i, embed)
+}
+
+// ============================================================================
+// NICK COMMAND
+// ============================================================================
+
+func handleNick(s *discordgo.Session, i *discordgo.InteractionCreate, opts []*discordgo.ApplicationCommandInteractionDataOption) {
+	user := interactionUser(i)
+	if user == nil {
+		respondText(s, i, "Unable to identify user.")
+		return
+	}
+
+	if !hasPermission(s, i.GuildID, user.ID, discordgo.PermissionManageNicknames) {
+		embed := createErrorEmbed("Missing Permissions", "You need the `Manage Nicknames` permission to use this command.")
+		respondEmbed(s, i, embed)
+		return
+	}
+
+	target := optionUser(opts, "user")
+	if target == nil {
+		respondText(s, i, "You must specify a user.")
+		return
+	}
+
+	nickname := optionString(opts, "nickname", "")
+
+	err := s.GuildMemberNickname(i.GuildID, target.ID, nickname)
+	if err != nil {
+		embed := createErrorEmbed("Failed", fmt.Sprintf("Could not change nickname: %v", err))
+		respondEmbed(s, i, embed)
+		return
+	}
+
+	msg := fmt.Sprintf("Reset **%s**'s nickname.", target.Username)
+	if nickname != "" {
+		msg = fmt.Sprintf("Changed **%s**'s nickname to **%s**.", target.Username, nickname)
+	}
+	embed := createSuccessEmbed("Nickname Updated", msg)
+	respondEmbed(s, i, embed)
+}
+
+// ============================================================================
+// ROLE COMMAND
+// ============================================================================
+
+func handleRole(s *discordgo.Session, i *discordgo.InteractionCreate, opts []*discordgo.ApplicationCommandInteractionDataOption) {
+	user := interactionUser(i)
+	if user == nil {
+		respondText(s, i, "Unable to identify user.")
+		return
+	}
+
+	sub, subOpts := getSubcommand(opts)
+
+	switch sub {
+	case "add", "remove":
+		if !hasPermission(s, i.GuildID, user.ID, discordgo.PermissionManageRoles) {
+			embed := createErrorEmbed("Missing Permissions", "You need the `Manage Roles` permission to use this command.")
+			respondEmbed(s, i, embed)
+			return
+		}
+
+		target := optionUser(subOpts, "user")
+		if target == nil {
+			respondText(s, i, "You must specify a user.")
+			return
+		}
+
+		role := optionRole(subOpts, "role")
+		if role == nil {
+			respondText(s, i, "You must specify a role.")
+			return
+		}
+
+		var err error
+		var action string
+		if sub == "add" {
+			err = s.GuildMemberRoleAdd(i.GuildID, target.ID, role.ID)
+			action = "added to"
+		} else {
+			err = s.GuildMemberRoleRemove(i.GuildID, target.ID, role.ID)
+			action = "removed from"
+		}
+
+		if err != nil {
+			embed := createErrorEmbed("Failed", fmt.Sprintf("Could not modify role: %v", err))
+			respondEmbed(s, i, embed)
+			return
+		}
+
+		embed := createSuccessEmbed("Role Updated", fmt.Sprintf("Role **%s** has been %s **%s**.", role.Name, action, target.Username))
+		respondEmbed(s, i, embed)
+
+	case "list":
+		guild, err := s.Guild(i.GuildID)
+		if err != nil {
+			respondText(s, i, "Failed to fetch guild information.")
+			return
+		}
+
+		if len(guild.Roles) == 0 {
+			respondText(s, i, "This server has no roles.")
+			return
+		}
+
+		// Sort roles by position (highest first)
+		roles := guild.Roles
+		sort.Slice(roles, func(a, b int) bool {
+			return roles[a].Position > roles[b].Position
+		})
+
+		var roleList string
+		count := 0
+		for _, r := range roles {
+			if r.Name == "@everyone" {
+				continue
+			}
+			roleList += fmt.Sprintf("<@&%s> - `%s`\n", r.ID, r.ID)
+			count++
+			if count >= 20 {
+				roleList += fmt.Sprintf("*...and %d more*", len(roles)-count-1)
+				break
+			}
+		}
+
+		embed := &discordgo.MessageEmbed{
+			Title:       fmt.Sprintf("📋 Server Roles (%d)", len(roles)-1),
+			Description: roleList,
+			Color:       ColorBlue,
+			Timestamp:   time.Now().Format(time.RFC3339),
+		}
+		respondEmbed(s, i, embed)
+
+	default:
+		respondText(s, i, "Invalid subcommand. Use add, remove, or list.")
+	}
+}
+
+// ============================================================================
+// ANNOUNCE COMMAND
+// ============================================================================
+
+func handleAnnounce(s *discordgo.Session, i *discordgo.InteractionCreate, opts []*discordgo.ApplicationCommandInteractionDataOption) {
+	user := interactionUser(i)
+	if user == nil {
+		respondText(s, i, "Unable to identify user.")
+		return
+	}
+
+	if !hasPermission(s, i.GuildID, user.ID, discordgo.PermissionManageMessages) {
+		embed := createErrorEmbed("Missing Permissions", "You need the `Manage Messages` permission to use this command.")
+		respondEmbed(s, i, embed)
+		return
+	}
+
+	channel := optionChannel(opts, "channel")
+	if channel == nil {
+		respondText(s, i, "You must specify a channel.")
+		return
+	}
+
+	message := optionString(opts, "message", "")
+	if message == "" {
+		respondText(s, i, "You must provide a message.")
+		return
+	}
+
+	ping := optionBool(opts, "ping", false)
+
+	// Build announcement embed
+	guild, _ := s.Guild(i.GuildID)
+	guildName := "Announcement"
+	if guild != nil {
+		guildName = guild.Name
+	}
+
+	embed := &discordgo.MessageEmbed{
+		Title:       fmt.Sprintf("📢 %s", guildName),
+		Description: message,
+		Color:       ColorBlue,
+		Footer:      &discordgo.MessageEmbedFooter{Text: fmt.Sprintf("Announced by %s", user.Username)},
+		Timestamp:   time.Now().Format(time.RFC3339),
+	}
+
+	content := ""
+	if ping {
+		content = "@everyone"
+	}
+
+	_, err := s.ChannelMessageSendComplex(channel.ID, &discordgo.MessageSend{
+		Content: content,
+		Embeds:  []*discordgo.MessageEmbed{embed},
+	})
+
+	if err != nil {
+		errEmbed := createErrorEmbed("Announcement Failed", fmt.Sprintf("Could not send announcement: %v", err))
+		respondEmbed(s, i, errEmbed)
+		return
+	}
+
+	confirmEmbed := createSuccessEmbed("Announcement Sent", fmt.Sprintf("Your announcement has been posted in <#%s>.", channel.ID))
+	respondEmbed(s, i, confirmEmbed)
+}
+
+// ============================================================================
+// SERVER UTILITY HANDLER
+// ============================================================================
+
+func handleServerUtility(s *discordgo.Session, i *discordgo.InteractionCreate) {
+	opts := i.ApplicationCommandData().Options
+	switch i.ApplicationCommandData().Name {
+	case "nick":
+		handleNick(s, i, opts)
+	case "role":
+		handleRole(s, i, opts)
+	case "announce":
+		handleAnnounce(s, i, opts)
+	}
 }

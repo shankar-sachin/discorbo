@@ -7,8 +7,8 @@ import (
 )
 
 type aiPattern struct {
-	pattern  *regexp.Regexp
-	replies  []string
+	pattern *regexp.Regexp
+	replies []string
 }
 
 var aiPatterns []aiPattern
@@ -55,6 +55,15 @@ func init() {
 				"Tons of stuff! `/help` shows the full list.\n\nSome favorites:\n- `/maze` for a game\n- `/daily` for coins\n- `/trivia` for a challenge\n- `/poll` to vote on things",
 			},
 		},
+		// Orange easter egg
+		{
+			`(?i)\b(are you orange|do you like orange|orange|)\b`,
+			[]string{
+				"Orange you glad I'm here? 🍊😄",
+				"Orange the orange of all the oranges hehe haw haw",
+				"Orange you curious about my other colors? 🌈",
+			},
+		},
 		// Games
 		{
 			`(?i)\b(game|games|play|wanna play|let('?s| us) play)\b`,
@@ -70,6 +79,8 @@ func init() {
 				"Ouch, that hurts my feelings! 😢 I'm trying my best...",
 				"I may be simple, but I have feelings! 😤",
 				"Well, I never! ...but okay fine, I'll try to do better 😅",
+				"I do like to be stupid, it helps me learn more! 📖",
+				"Thanks for the gracious compliment! 🙏",
 			},
 		},
 		// Compliments toward bot

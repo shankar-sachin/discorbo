@@ -586,9 +586,12 @@ func handleBalance(s *discordgo.Session, i *discordgo.InteractionCreate) {
 	}
 
 	embed := &discordgo.MessageEmbed{
-		Title:  fmt.Sprintf("%s's Balance", user.Username),
-		Color:  ColorGreen,
-		Fields: fields,
+		Title:     fmt.Sprintf("💰 %s's Balance", user.Username),
+		Color:     ColorGreen,
+		Fields:    fields,
+		Timestamp: time.Now().Format(time.RFC3339),
+		Footer:    &discordgo.MessageEmbedFooter{Text: "Discorbo"},
+		Thumbnail: &discordgo.MessageEmbedThumbnail{URL: userAvatar(user)},
 	}
 
 	respondEmbed(s, i, embed)

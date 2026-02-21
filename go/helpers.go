@@ -105,6 +105,23 @@ func createFunEmbed(title, description string) *discordgo.MessageEmbed {
 	}
 }
 
+// userAvatar returns the avatar URL for a user (256px), or "" if none.
+func userAvatar(u *discordgo.User) string {
+	if u == nil {
+		return ""
+	}
+	return u.AvatarURL("256")
+}
+
+// createGameEmbed builds a fun embed with an optional thumbnail.
+func createGameEmbed(title, description, thumbnailURL string) *discordgo.MessageEmbed {
+	e := createFunEmbed(title, description)
+	if thumbnailURL != "" {
+		e.Thumbnail = &discordgo.MessageEmbedThumbnail{URL: thumbnailURL}
+	}
+	return e
+}
+
 func deferReply(s *discordgo.Session, i *discordgo.InteractionCreate) {
 	_ = s.InteractionRespond(i.Interaction, &discordgo.InteractionResponse{
 		Type: discordgo.InteractionResponseDeferredChannelMessageWithSource,
@@ -177,6 +194,24 @@ func optionUser(opts []*discordgo.ApplicationCommandInteractionDataOption, name 
 	for _, o := range opts {
 		if o.Name == name {
 			return o.UserValue(nil)
+		}
+	}
+	return nil
+}
+
+func optionChannel(opts []*discordgo.ApplicationCommandInteractionDataOption, name string) *discordgo.Channel {
+	for _, o := range opts {
+		if o.Name == name {
+			return o.ChannelValue(nil)
+		}
+	}
+	return nil
+}
+
+func optionRole(opts []*discordgo.ApplicationCommandInteractionDataOption, name string) *discordgo.Role {
+	for _, o := range opts {
+		if o.Name == name {
+			return o.RoleValue(nil, "")
 		}
 	}
 	return nil
