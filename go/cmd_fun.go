@@ -14,10 +14,7 @@ import (
 )
 
 // Simple fun commands (no API, no persistent state)
-func handleSimpleFun(s *discordgo.Session, i *discordgo.InteractionCreate) {
-	cmd := i.ApplicationCommandData().Name
-	opts := i.ApplicationCommandData().Options
-
+func handleSimpleFun(s *discordgo.Session, i *discordgo.InteractionCreate, cmd string, opts []*discordgo.ApplicationCommandInteractionDataOption) {
 	switch cmd {
 	case "coinflip":
 		result := "Heads"
@@ -139,10 +136,7 @@ func handleSimpleFun(s *discordgo.Session, i *discordgo.InteractionCreate) {
 }
 
 // Interactive fun commands (user interaction, no API)
-func handleInteractiveFun(s *discordgo.Session, i *discordgo.InteractionCreate) {
-	cmd := i.ApplicationCommandData().Name
-	opts := i.ApplicationCommandData().Options
-
+func handleInteractiveFun(s *discordgo.Session, i *discordgo.InteractionCreate, cmd string, opts []*discordgo.ApplicationCommandInteractionDataOption) {
 	switch cmd {
 	case "ship":
 		u1 := optionUser(opts, "user1")
@@ -235,10 +229,7 @@ func handleInteractiveFun(s *discordgo.Session, i *discordgo.InteractionCreate) 
 }
 
 // API-based fun commands
-func handleAPIFun(s *discordgo.Session, i *discordgo.InteractionCreate) {
-	cmd := i.ApplicationCommandData().Name
-	opts := i.ApplicationCommandData().Options
-
+func handleAPIFun(s *discordgo.Session, i *discordgo.InteractionCreate, cmd string, opts []*discordgo.ApplicationCommandInteractionDataOption) {
 	switch cmd {
 	case "joke":
 		deferReply(s, i)
@@ -447,23 +438,49 @@ func handleAPIFun(s *discordgo.Session, i *discordgo.InteractionCreate) {
 	}
 }
 
-// Game-based fun commands (persistent state, progression)
-func handleGameFun(s *discordgo.Session, i *discordgo.InteractionCreate) {
-	cmd := i.ApplicationCommandData().Name
+// handleFunCmd is the top-level /fun group router.
+func handleFunCmd(s *discordgo.Session, i *discordgo.InteractionCreate) {
 	opts := i.ApplicationCommandData().Options
+	if len(opts) == 0 {
+		return
+	}
+	sub := opts[0]
+	subOpts := sub.Options
 
-	switch cmd {
+	switch sub.Name {
+	// Simple / interactive / API subcommands
+	case "8ball", "coinflip", "dice", "random-number", "random-choice", "rate",
+		"reverse-text", "mock-text", "flip-text", "rps", "roll":
+		handleSimpleFun(s, i, sub.Name, subOpts)
+	case "ship", "summon", "vibecheck", "would-you-rather", "hotseat":
+		handleInteractiveFun(s, i, sub.Name, subOpts)
+	case "joke", "meme":
+		handleAPIFun(s, i, sub.Name, subOpts)
+	// trivia is now a SubcommandGroup (play/leaderboard)
+	case "trivia":
+		if len(subOpts) == 0 {
+			return
+		}
+		trivSub := subOpts[0]
+		switch trivSub.Name {
+		case "play":
+			handleAPIFun(s, i, "trivia", trivSub.Options)
+		case "leaderboard":
+			handleAPIFun(s, i, "trivia-leaderboard", nil)
+		}
+	// Game subcommands
 	case "battle":
-		handleBattle(s, i, opts)
-	case "daily":
-		handleDaily(s, i, opts)
+		handleBattle(s, i, subOpts)
+	// SubcommandGroups — pass the inner subcommand slice
 	case "bossraid":
-		handleBossRaid(s, i, opts)
-	case "quote":
-		handleQuote(s, i, opts)
-	case "quest":
-		handleQuest(s, i, opts)
+		handleBossRaid(s, i, subOpts)
+	case "daily":
+		handleDaily(s, i, subOpts)
 	case "loot":
-		handleLoot(s, i, opts)
+		handleLoot(s, i, subOpts)
+	case "quest":
+		handleQuest(s, i, subOpts)
+	case "quote":
+		handleQuote(s, i, subOpts)
 	}
 }

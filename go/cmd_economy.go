@@ -878,3 +878,27 @@ func optionFloat(opts []*discordgo.ApplicationCommandInteractionDataOption, name
 	}
 	return def
 }
+
+// handleEconomyCmd is the top-level /economy group router.
+func handleEconomyCmd(s *discordgo.Session, i *discordgo.InteractionCreate) {
+	opts := i.ApplicationCommandData().Options
+	if len(opts) == 0 {
+		return
+	}
+	sub := opts[0]
+	subOpts := sub.Options
+
+	switch sub.Name {
+	case "balance":
+		handleBalance(s, i)
+	case "shop":
+		handleShop(s, i, subOpts)
+	case "inventory":
+		handleInventory(s, i, subOpts)
+	case "trade":
+		handleTrade(s, i, subOpts)
+	case "admin":
+		handleEconomyAdmin(s, i, subOpts)
+	}
+}
+

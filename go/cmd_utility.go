@@ -15,120 +15,78 @@ import (
 	"github.com/bwmarrin/discordgo"
 )
 
-// Info utility commands
-func handleInfoUtility(s *discordgo.Session, i *discordgo.InteractionCreate) {
-	cmd := i.ApplicationCommandData().Name
+// handleUtilCmd is the top-level /util group router.
+func handleUtilCmd(s *discordgo.Session, i *discordgo.InteractionCreate) {
 	opts := i.ApplicationCommandData().Options
+	if len(opts) == 0 {
+		return
+	}
+	sub := opts[0]
+	subOpts := sub.Options
 
-	switch cmd {
+	switch sub.Name {
 	case "ping":
 		respondText(s, i, fmt.Sprintf("Pong! Gateway ping: %dms", s.HeartbeatLatency().Milliseconds()))
 	case "help":
-		handleHelp(s, i, opts)
+		handleHelp(s, i, subOpts)
 	case "avatar":
-		handleAvatar(s, i, opts)
+		handleAvatar(s, i, subOpts)
 	case "userinfo":
-		handleUserInfo(s, i, opts)
+		handleUserInfo(s, i, subOpts)
 	case "serverinfo":
 		handleServerInfo(s, i)
 	case "channel-info":
-		handleChannelInfo(s, i, opts)
+		handleChannelInfo(s, i, subOpts)
 	case "role-info":
-		handleRoleInfo(s, i, opts)
+		handleRoleInfo(s, i, subOpts)
 	case "stats":
 		handleStats(s, i)
-	}
-}
-
-// Tool utility commands
-func handleToolUtility(s *discordgo.Session, i *discordgo.InteractionCreate) {
-	cmd := i.ApplicationCommandData().Name
-	opts := i.ApplicationCommandData().Options
-
-	switch cmd {
-	case "calc":
-		handleCalc(s, i, opts)
-	case "translate":
-		handleTranslate(s, i, opts)
 	case "poll":
-		handlePoll(s, i, opts)
+		handlePoll(s, i, subOpts)
+	case "translate":
+		handleTranslate(s, i, subOpts)
 	case "timer":
-		handleTimer(s, i, opts)
-	case "convert":
-		handleConvert(s, i, opts)
-	}
-}
-
-// Economy utility commands
-func handleEconomyUtility(s *discordgo.Session, i *discordgo.InteractionCreate) {
-	cmd := i.ApplicationCommandData().Name
-	opts := i.ApplicationCommandData().Options
-
-	switch cmd {
-	case "shop":
-		handleShop(s, i, opts)
-	case "inventory":
-		handleInventory(s, i, opts)
-	case "balance":
-		handleBalance(s, i)
-	case "trade":
-		handleTrade(s, i, opts)
-	case "economy-admin":
-		handleEconomyAdmin(s, i, opts)
-	}
-}
-
-// Data utility commands
-func handleDataUtility(s *discordgo.Session, i *discordgo.InteractionCreate) {
-	cmd := i.ApplicationCommandData().Name
-	opts := i.ApplicationCommandData().Options
-
-	switch cmd {
+		handleTimer(s, i, subOpts)
 	case "remind":
-		handleRemind(s, i, opts)
+		handleRemind(s, i, subOpts)
 	case "reminders":
-		handleReminders(s, i, opts)
+		handleReminders(s, i, subOpts)
 	case "afk":
-		handleAFK(s, i, opts)
+		handleAFK(s, i, subOpts)
 	case "clear-my-data":
-		handleClearMyData(s, i, opts)
+		handleClearMyData(s, i, subOpts)
+	}
+}
+
+// handleMathCmd is the top-level /math group router.
+func handleMathCmd(s *discordgo.Session, i *discordgo.InteractionCreate) {
+	opts := i.ApplicationCommandData().Options
+	if len(opts) == 0 {
+		return
+	}
+	sub := opts[0]
+	subOpts := sub.Options
+
+	switch sub.Name {
+	case "calc":
+		handleCalc(s, i, subOpts)
+	case "convert":
+		handleConvert(s, i, subOpts)
 	}
 }
 
 func handleHelp(s *discordgo.Session, i *discordgo.InteractionCreate, opts []*discordgo.ApplicationCommandInteractionDataOption) {
 	category := strings.ToLower(optionString(opts, "category", "all"))
 
-	funSet := map[string]bool{}
-	for _, c := range funCommands() {
-		funSet[c.Name] = true
-	}
-	modSet := map[string]bool{}
-	for _, c := range moderationCommands() {
-		modSet[c.Name] = true
-	}
-
-	funLines := []string{}
-	utilLines := []string{}
-	modLines := []string{}
-	for _, c := range allCommands() {
-		line := fmt.Sprintf("`/%s` - %s", c.Name, c.Description)
-		if funSet[c.Name] {
-			funLines = append(funLines, line)
-		} else if modSet[c.Name] {
-			modLines = append(modLines, line)
-		} else {
-			utilLines = append(utilLines, line)
+	// Build subcommand lists per top-level group
+	groups := map[string][]string{}
+	for _, cmd := range allCommands() {
+		lines := []string{}
+		for _, sub := range cmd.Options {
+			lines = append(lines, fmt.Sprintf("`/%s %s` - %s", cmd.Name, sub.Name, sub.Description))
 		}
-	}
-	sort.Strings(funLines)
-	sort.Strings(utilLines)
-	sort.Strings(modLines)
-
-	embed := &discordgo.MessageEmbed{
-		Title:       "🤖 Discorbo Commands",
-		Description: fmt.Sprintf("**%d total commands** across 3 categories", len(funLines)+len(utilLines)+len(modLines)),
-		Color:       ColorBlue,
-		Timestamp:   time.Now().Format(time.RFC3339),
+		sort.Strings(lines)
+		groups[cmd.Name] = lines
 	}
 
 	truncate := func(lines []string) string {
@@ -139,31 +97,44 @@ func handleHelp(s *discordgo.Session, i *discordgo.InteractionCreate, opts []*di
 		return v
 	}
 
-	if category == "all" || category == "fun" {
-		value := "No fun commands found."
-		if len(funLines) > 0 {
-			value = truncate(funLines)
-		}
-		embed.Fields = append(embed.Fields, &discordgo.MessageEmbedField{
-			Name: fmt.Sprintf("🎮 Fun & Games (%d)", len(funLines)), Value: value,
-		})
+	type groupDef struct {
+		key   string
+		icon  string
+		label string
 	}
-	if category == "all" || category == "utility" {
-		value := "No utility commands found."
-		if len(utilLines) > 0 {
-			value = truncate(utilLines)
-		}
-		embed.Fields = append(embed.Fields, &discordgo.MessageEmbedField{
-			Name: fmt.Sprintf("🛠️ Utility (%d)", len(utilLines)), Value: value,
-		})
+	allGroups := []groupDef{
+		{"games", "🎮", "Games"},
+		{"casino", "🎰", "Casino"},
+		{"fun", "🎉", "Fun"},
+		{"math", "🔢", "Math"},
+		{"util", "🛠️", "Utility"},
+		{"economy", "💰", "Economy"},
+		{"mod", "🛡️", "Moderation"},
 	}
-	if category == "all" || category == "moderation" {
-		value := "No moderation commands found."
-		if len(modLines) > 0 {
-			value = truncate(modLines)
+
+	total := 0
+	for _, g := range allGroups {
+		total += len(groups[g.key])
+	}
+
+	embed := &discordgo.MessageEmbed{
+		Title:       "🤖 Discorbo Commands",
+		Description: fmt.Sprintf("**%d subcommands** across 7 groups. Use `/group subcommand`.", total),
+		Color:       ColorBlue,
+		Timestamp:   time.Now().Format(time.RFC3339),
+	}
+
+	for _, g := range allGroups {
+		if category != "all" && category != g.key {
+			continue
+		}
+		lines := groups[g.key]
+		value := "No commands found."
+		if len(lines) > 0 {
+			value = truncate(lines)
 		}
 		embed.Fields = append(embed.Fields, &discordgo.MessageEmbedField{
-			Name: fmt.Sprintf("🛡️ Moderation (%d)", len(modLines)), Value: value,
+			Name: fmt.Sprintf("%s /%s (%d)", g.icon, g.key, len(lines)), Value: value,
 		})
 	}
 	respondEmbed(s, i, embed)

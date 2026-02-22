@@ -15,7 +15,20 @@
       "Bash(go mod tidy:*)",
       "Bash(npm run build:go:*)",
       "Bash(pip install:*)",
-      "Bash(go run:*)"
+      "Bash(go run:*)",
+      "Bash(grep:*)",
+      "Bash(python3:*)",
+      "Bash(go vet:*)",
+      "Bash(timeout:*)",
+      "Bash(git add:*)",
+      "Bash(git commit:*)",
+      "Bash(git push:*)",
+      "Bash(taskkill:*)",
+      "Bash(powershell -Command:*)",
+      "WebFetch(domain:quickchart.io)",
+      "WebFetch(domain:deckofcardsapi.com)",
+      "WebSearch",
+      "Bash(tasklist:*)"
     ]
   }
 }

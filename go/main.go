@@ -1,7 +1,6 @@
 package main
 
 import (
-	"fmt"
 	"log"
 	"math/rand"
 	"os"
@@ -135,42 +134,21 @@ func registerCommands(s *discordgo.Session, appID, guildID string) error {
 func handleCommand(s *discordgo.Session, i *discordgo.InteractionCreate) {
 	name := i.ApplicationCommandData().Name
 	switch name {
-	case "maze":
-		handleMaze(s, i)
-	case "maze-leaderboard":
-		handleMazeLeaderboard(s, i)
-	case "8ball", "coinflip", "dice", "random-number", "random-choice", "rate",
-		"reverse-text", "mock-text", "flip-text", "rps", "roll":
-		handleSimpleFun(s, i)
-	case "ship", "summon", "vibecheck", "would-you-rather", "hotseat":
-		handleInteractiveFun(s, i)
-	case "joke", "meme", "trivia", "trivia-leaderboard":
-		handleAPIFun(s, i)
-	case "battle", "daily", "bossraid", "quote", "quest", "loot", "tag":
-		handleGameFun(s, i)
-	case "blackjack", "slots", "roulette", "russian-roulette", "war":
-		handleCasinoGames(s, i)
-	case "poker", "go-fish", "snap":
-		handleCardGames(s, i)
-	case "2048", "highlow":
-		handlePuzzleGames(s, i)
-	case "ping", "help", "avatar", "userinfo", "serverinfo", "channel-info", "role-info", "stats":
-		handleInfoUtility(s, i)
-	case "calc", "translate", "poll", "timer", "convert":
-		handleToolUtility(s, i)
-	case "remind", "reminders", "afk", "clear-my-data":
-		handleDataUtility(s, i)
-	case "shop", "inventory", "balance", "trade", "economy-admin":
-		handleEconomyUtility(s, i)
-	case "kick", "ban", "unban", "timeout", "warn", "warnings", "clearwarnings":
-		handleCoreModeration(s, i)
-	case "purge", "lock", "unlock", "slowmode":
-		handleMessageModeration(s, i)
-	case "modlog", "automod":
-		handleModConfig(s, i)
-	case "nick", "role", "announce":
-		handleServerUtility(s, i)
+	case "games":
+		handleGamesCmd(s, i)
+	case "casino":
+		handleCasinoCmd(s, i)
+	case "fun":
+		handleFunCmd(s, i)
+	case "math":
+		handleMathCmd(s, i)
+	case "util":
+		handleUtilCmd(s, i)
+	case "economy":
+		handleEconomyCmd(s, i)
+	case "mod":
+		handleModCmd(s, i)
 	default:
-		respondText(s, i, fmt.Sprintf("/%s is implemented in Go.", name))
+		respondText(s, i, "Unknown command: /"+name)
 	}
 }

@@ -1,23 +1,49 @@
 package main
 
 import (
+	"encoding/json"
 	"fmt"
 	"math/rand"
+	"net/url"
+	"strconv"
 	"strings"
 	"time"
 
 	"github.com/bwmarrin/discordgo"
 )
 
-// ─── Puzzle games router ───────────────────────────────────────────────────────
+// ─── Games group router ────────────────────────────────────────────────────────
 
-func handlePuzzleGames(s *discordgo.Session, i *discordgo.InteractionCreate) {
-	name := i.ApplicationCommandData().Name
-	switch name {
+func handleGamesCmd(s *discordgo.Session, i *discordgo.InteractionCreate) {
+	opts := i.ApplicationCommandData().Options
+	if len(opts) == 0 {
+		return
+	}
+	sub := opts[0]
+	switch sub.Name {
 	case "2048":
 		handle2048(s, i)
 	case "highlow":
-		handleHighLow(s, i)
+		handleHighLow(s, i, sub.Options)
+	case "maze":
+		if len(sub.Options) == 0 {
+			return
+		}
+		mazeSub := sub.Options[0]
+		switch mazeSub.Name {
+		case "play":
+			handleMaze(s, i, mazeSub.Options)
+		case "leaderboard":
+			handleMazeLeaderboard(s, i, mazeSub.Options)
+		}
+	case "war":
+		handleWar(s, i, sub.Options)
+	case "snap":
+		handleSnap(s, i, sub.Options)
+	case "go-fish":
+		handleGoFish(s, i, sub.Options)
+	case "tag":
+		handleTag(s, i, sub.Options)
 	}
 }
 
@@ -93,26 +119,109 @@ func update2048HighScore(userID string, score int) int {
 	return scores[userID]
 }
 
-func build2048Embed(sess *g2048Session) *discordgo.MessageEmbed {
-	tileEmoji := map[int]string{
-		0: "⬛", 2: "2️⃣", 4: "4️⃣", 8: "8️⃣", 16: "🔵",
-		32: "🟣", 64: "🟠", 128: "🟡", 256: "🟢", 512: "🔴",
-		1024: "💜", 2048: "🌟",
-	}
-	rows := []string{}
-	for r := 0; r < 4; r++ {
-		rowStr := ""
-		for c := 0; c < 4; c++ {
-			v := sess.Grid[r][c]
-			em, ok := tileEmoji[v]
-			if !ok {
-				em = "🌟"
+// generate2048ImageURL builds a QuickChart matrix chart with official 2048 tile colors.
+func generate2048ImageURL(grid [4][4]int) string {
+	tileColor := func(v int) string {
+		switch v {
+		case 2:
+			return "#eee4da"
+		case 4:
+			return "#ede0c8"
+		case 8:
+			return "#f2b179"
+		case 16:
+			return "#f59563"
+		case 32:
+			return "#f67c5f"
+		case 64:
+			return "#f65e3b"
+		case 128:
+			return "#edcf72"
+		case 256:
+			return "#edcc61"
+		case 512:
+			return "#edc850"
+		case 1024:
+			return "#edc53f"
+		case 2048:
+			return "#edc22e"
+		default:
+			if v > 2048 {
+				return "#3c3a32"
 			}
-			rowStr += em
+			return "#cdc1b4" // empty cell
 		}
-		rows = append(rows, rowStr)
 	}
 
+	type dp struct {
+		X float64 `json:"x"`
+		Y float64 `json:"y"`
+		V string  `json:"v"`
+	}
+
+	var points []dp
+	var bgColors []string
+	var textColors []string
+
+	for r := 0; r < 4; r++ {
+		for c := 0; c < 4; c++ {
+			v := grid[r][c]
+			vStr := ""
+			if v != 0 {
+				vStr = strconv.Itoa(v)
+			}
+			// y is inverted: row 0 = top (y=3.5), row 3 = bottom (y=0.5)
+			points = append(points, dp{X: float64(c) + 0.5, Y: float64(3-r) + 0.5, V: vStr})
+			bgColors = append(bgColors, tileColor(v))
+			if v <= 4 {
+				textColors = append(textColors, "#776e65")
+			} else {
+				textColors = append(textColors, "#f9f6f2")
+			}
+		}
+	}
+
+	cfg := map[string]interface{}{
+		"type": "matrix",
+		"data": map[string]interface{}{
+			"datasets": []map[string]interface{}{{
+				"data":            points,
+				"backgroundColor": bgColors,
+				"borderColor":     "#bbada0",
+				"borderWidth":     4,
+				"width":           "(ctx) => ctx.chart.chartArea ? ctx.chart.chartArea.width / 4 - 4 : 90",
+				"height":          "(ctx) => ctx.chart.chartArea ? ctx.chart.chartArea.height / 4 - 4 : 90",
+			}},
+		},
+		"options": map[string]interface{}{
+			"animation": false,
+			"plugins": map[string]interface{}{
+				"legend": map[string]interface{}{"display": false},
+				"datalabels": map[string]interface{}{
+					"display":   true,
+					"formatter": "(value) => value.v",
+					"color":     textColors,
+					"font": map[string]interface{}{
+						"size":   22,
+						"weight": "bold",
+					},
+				},
+			},
+			"scales": map[string]interface{}{
+				"x": map[string]interface{}{"display": false, "min": 0, "max": 4},
+				"y": map[string]interface{}{"display": false, "min": 0, "max": 4},
+			},
+		},
+	}
+
+	b, err := json.Marshal(cfg)
+	if err != nil {
+		return ""
+	}
+	return "https://quickchart.io/chart?w=400&h=400&bkg=%23bbada0&c=" + url.QueryEscape(string(b))
+}
+
+func build2048Embed(sess *g2048Session) *discordgo.MessageEmbed {
 	scores := map[string]int{}
 	_ = readData("2048-scores.json", &scores)
 	highScore := scores[sess.UserID]
@@ -124,15 +233,22 @@ func build2048Embed(sess *g2048Session) *discordgo.MessageEmbed {
 		fields = append(fields, &discordgo.MessageEmbedField{Name: "High Score", Value: fmt.Sprintf("%d", highScore), Inline: true})
 	}
 
-	return &discordgo.MessageEmbed{
-		Title:       "🟨 2048",
-		Description: strings.Join(rows, "\n"),
-		Color:       ColorYellow,
-		Fields:      fields,
-		Footer:      &discordgo.MessageEmbedFooter{Text: "Reach 2048 to win! | Discorbo"},
-		Timestamp:   time.Now().Format(time.RFC3339),
+	imageURL := generate2048ImageURL(sess.Grid)
+	e := &discordgo.MessageEmbed{
+		Title:     "🟨 2048",
+		Color:     ColorYellow,
+		Fields:    fields,
+		Footer:    &discordgo.MessageEmbedFooter{Text: "Reach 2048 to win! | Discorbo"},
+		Timestamp: time.Now().Format(time.RFC3339),
 	}
+	if imageURL != "" {
+		e.Image = &discordgo.MessageEmbedImage{URL: imageURL}
+	}
+	return e
 }
+
+// keep strings import used elsewhere in the file
+var _ = strings.Join
 
 func build2048Buttons() []discordgo.MessageComponent {
 	return []discordgo.MessageComponent{
@@ -350,13 +466,12 @@ func has2048Moves(grid *[4][4]int) bool {
 
 // ─── Higher or Lower ───────────────────────────────────────────────────────────
 
-func handleHighLow(s *discordgo.Session, i *discordgo.InteractionCreate) {
+func handleHighLow(s *discordgo.Session, i *discordgo.InteractionCreate, opts []*discordgo.ApplicationCommandInteractionDataOption) {
 	user := interactionUser(i)
 	if user == nil {
 		respondText(s, i, "Unable to identify user.")
 		return
 	}
-	opts := i.ApplicationCommandData().Options
 	bet := int(optionInt(opts, "bet", 10))
 	coins, _ := getCoins(user.ID)
 	if coins < bet {

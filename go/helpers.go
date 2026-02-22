@@ -226,6 +226,28 @@ func getSubcommand(opts []*discordgo.ApplicationCommandInteractionDataOption) (s
 	return "", opts
 }
 
+// cardImageURL converts an internal card notation (e.g. "A♠", "10♥") to a deckofcardsapi.com image URL.
+// Pass "" to get the card back image.
+func cardImageURL(card string) string {
+	if card == "" {
+		return "https://deckofcardsapi.com/static/img/back.png"
+	}
+	runes := []rune(card)
+	suit := runes[len(runes)-1]
+	rank := string(runes[:len(runes)-1])
+	suitMap := map[rune]string{
+		'♠': "S",
+		'♥': "H",
+		'♦': "D",
+		'♣': "C",
+	}
+	s, ok := suitMap[suit]
+	if !ok {
+		return "https://deckofcardsapi.com/static/img/back.png"
+	}
+	return "https://deckofcardsapi.com/static/img/" + rank + s + ".png"
+}
+
 // String manipulation helpers
 func reverse(s string) string {
 	r := []rune(s)

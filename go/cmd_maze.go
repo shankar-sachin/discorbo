@@ -14,14 +14,14 @@ import (
 	"github.com/bwmarrin/discordgo"
 )
 
-func handleMaze(s *discordgo.Session, i *discordgo.InteractionCreate) {
+func handleMaze(s *discordgo.Session, i *discordgo.InteractionCreate, opts []*discordgo.ApplicationCommandInteractionDataOption) {
 	user := interactionUser(i)
 	if user == nil {
 		respondText(s, i, "Unable to identify user for maze.")
 		return
 	}
 	levelIndex := int64(0)
-	for _, o := range i.ApplicationCommandData().Options {
+	for _, o := range opts {
 		if o.Name == "level" {
 			levelIndex = o.IntValue()
 		}
@@ -100,9 +100,9 @@ func handleMaze(s *discordgo.Session, i *discordgo.InteractionCreate) {
 	}(msg.ChannelID, msg.ID, level.TimeLimit)
 }
 
-func handleMazeLeaderboard(s *discordgo.Session, i *discordgo.InteractionCreate) {
+func handleMazeLeaderboard(s *discordgo.Session, i *discordgo.InteractionCreate, opts []*discordgo.ApplicationCommandInteractionDataOption) {
 	levelFilter := int64(-1)
-	for _, o := range i.ApplicationCommandData().Options {
+	for _, o := range opts {
 		if o.Name == "level" {
 			levelFilter = o.IntValue()
 		}

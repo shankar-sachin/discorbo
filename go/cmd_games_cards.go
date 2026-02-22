@@ -10,29 +10,16 @@ import (
 	"github.com/bwmarrin/discordgo"
 )
 
-// ─── Card games router ─────────────────────────────────────────────────────────
-
-func handleCardGames(s *discordgo.Session, i *discordgo.InteractionCreate) {
-	name := i.ApplicationCommandData().Name
-	switch name {
-	case "poker":
-		handlePoker(s, i)
-	case "go-fish":
-		handleGoFish(s, i)
-	case "snap":
-		handleSnap(s, i)
-	}
-}
+// ─── Card games (poker routed via /casino, go-fish/snap via /games) ────────────
 
 // ─── Poker (5-card video poker draw variant) ───────────────────────────────────
 
-func handlePoker(s *discordgo.Session, i *discordgo.InteractionCreate) {
+func handlePoker(s *discordgo.Session, i *discordgo.InteractionCreate, opts []*discordgo.ApplicationCommandInteractionDataOption) {
 	user := interactionUser(i)
 	if user == nil {
 		respondText(s, i, "Unable to identify user.")
 		return
 	}
-	opts := i.ApplicationCommandData().Options
 	bet := int(optionInt(opts, "bet", 10))
 	coins, _ := getCoins(user.ID)
 	if coins < bet {
@@ -59,7 +46,7 @@ func handlePoker(s *discordgo.Session, i *discordgo.InteractionCreate) {
 		Type: discordgo.InteractionResponseDeferredChannelMessageWithSource,
 	})
 	msg, err := s.FollowupMessageCreate(i.Interaction, true, &discordgo.WebhookParams{
-		Embeds:     []*discordgo.MessageEmbed{buildPokerEmbed(sess)},
+		Embeds:     buildPokerEmbeds(sess),
 		Components: buildPokerHoldButtons(sess),
 	})
 	if err != nil {
@@ -81,7 +68,9 @@ func handlePoker(s *discordgo.Session, i *discordgo.InteractionCreate) {
 	}()
 }
 
-func buildPokerEmbed(sess *pokerSession) *discordgo.MessageEmbed {
+const pokerGalleryURL = "https://deckofcardsapi.com/poker"
+
+func buildPokerEmbeds(sess *pokerSession) []*discordgo.MessageEmbed {
 	handDisplay := make([]string, 5)
 	for idx, card := range sess.Hand {
 		if sess.Held[idx] {
@@ -94,7 +83,8 @@ func buildPokerEmbed(sess *pokerSession) *discordgo.MessageEmbed {
 	if sess.Drawn {
 		phase = evaluatePokerHand(sess.Hand)
 	}
-	return &discordgo.MessageEmbed{
+	main := &discordgo.MessageEmbed{
+		URL:         pokerGalleryURL,
 		Title:       "♠️ Video Poker",
 		Description: strings.Join(handDisplay, "  "),
 		Color:       ColorPurple,
@@ -105,6 +95,18 @@ func buildPokerEmbed(sess *pokerSession) *discordgo.MessageEmbed {
 		Footer:    &discordgo.MessageEmbedFooter{Text: "Bold = held | Discorbo"},
 		Timestamp: time.Now().Format(time.RFC3339),
 	}
+	if len(sess.Hand) > 0 {
+		main.Image = &discordgo.MessageEmbedImage{URL: cardImageURL(sess.Hand[0])}
+	}
+	embeds := []*discordgo.MessageEmbed{main}
+	for _, card := range sess.Hand[1:] {
+		embeds = append(embeds, &discordgo.MessageEmbed{
+			URL:   pokerGalleryURL,
+			Color: ColorPurple,
+			Image: &discordgo.MessageEmbedImage{URL: cardImageURL(card)},
+		})
+	}
+	return embeds
 }
 
 func buildPokerHoldButtons(sess *pokerSession) []discordgo.MessageComponent {
@@ -163,7 +165,7 @@ func handlePokerComponent(s *discordgo.Session, i *discordgo.InteractionCreate) 
 		_ = s.InteractionRespond(i.Interaction, &discordgo.InteractionResponse{
 			Type: discordgo.InteractionResponseUpdateMessage,
 			Data: &discordgo.InteractionResponseData{
-				Embeds:     []*discordgo.MessageEmbed{buildPokerEmbed(sess)},
+				Embeds:     buildPokerEmbeds(sess),
 				Components: buildPokerHoldButtons(sess),
 			},
 		})
@@ -195,13 +197,13 @@ func handlePokerComponent(s *discordgo.Session, i *discordgo.InteractionCreate) 
 		delete(pokerSessions, i.Message.ID)
 		gameMu.Unlock()
 
-		embed := buildPokerEmbed(sess)
-		embed.Description = strings.Join(sess.Hand, "  ")
-		embed.Fields[0].Value = handName
-		embed.Fields = append(embed.Fields, &discordgo.MessageEmbedField{Name: "Result", Value: resultLine, Inline: false})
+		embeds := buildPokerEmbeds(sess)
+		embeds[0].Description = strings.Join(sess.Hand, "  ")
+		embeds[0].Fields[0].Value = handName
+		embeds[0].Fields = append(embeds[0].Fields, &discordgo.MessageEmbedField{Name: "Result", Value: resultLine, Inline: false})
 		_ = s.InteractionRespond(i.Interaction, &discordgo.InteractionResponse{
 			Type: discordgo.InteractionResponseUpdateMessage,
-			Data: &discordgo.InteractionResponseData{Embeds: []*discordgo.MessageEmbed{embed}, Components: []discordgo.MessageComponent{}},
+			Data: &discordgo.InteractionResponseData{Embeds: embeds, Components: []discordgo.MessageComponent{}},
 		})
 		return
 	}
@@ -302,7 +304,7 @@ func pokerPayoutMult(hand string) int {
 
 // ─── Go Fish ───────────────────────────────────────────────────────────────────
 
-func handleGoFish(s *discordgo.Session, i *discordgo.InteractionCreate) {
+func handleGoFish(s *discordgo.Session, i *discordgo.InteractionCreate, _ []*discordgo.ApplicationCommandInteractionDataOption) {
 	user := interactionUser(i)
 	if user == nil {
 		respondText(s, i, "Unable to identify user.")
@@ -589,13 +591,12 @@ func pluralS(n int) string {
 
 // ─── Snap ──────────────────────────────────────────────────────────────────────
 
-func handleSnap(s *discordgo.Session, i *discordgo.InteractionCreate) {
+func handleSnap(s *discordgo.Session, i *discordgo.InteractionCreate, opts []*discordgo.ApplicationCommandInteractionDataOption) {
 	user := interactionUser(i)
 	if user == nil {
 		respondText(s, i, "Unable to identify user.")
 		return
 	}
-	opts := i.ApplicationCommandData().Options
 	bet := int(optionInt(opts, "bet", 10))
 	coins, _ := getCoins(user.ID)
 	if coins < bet {

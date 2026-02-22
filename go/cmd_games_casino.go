@@ -119,31 +119,34 @@ func modifyCoins(userID, username string, delta int) int {
 
 // ─── Casino games router ───────────────────────────────────────────────────────
 
-func handleCasinoGames(s *discordgo.Session, i *discordgo.InteractionCreate) {
-	name := i.ApplicationCommandData().Name
-	switch name {
+func handleCasinoCmd(s *discordgo.Session, i *discordgo.InteractionCreate) {
+	opts := i.ApplicationCommandData().Options
+	if len(opts) == 0 {
+		return
+	}
+	sub := opts[0]
+	switch sub.Name {
 	case "blackjack":
-		handleBlackjack(s, i)
+		handleBlackjack(s, i, sub.Options)
 	case "slots":
-		handleSlots(s, i)
+		handleSlots(s, i, sub.Options)
 	case "roulette":
-		handleRoulette(s, i)
+		handleRoulette(s, i, sub.Options)
 	case "russian-roulette":
-		handleRussianRoulette(s, i)
-	case "war":
-		handleWar(s, i)
+		handleRussianRoulette(s, i, sub.Options)
+	case "poker":
+		handlePoker(s, i, sub.Options)
 	}
 }
 
 // ─── Blackjack ─────────────────────────────────────────────────────────────────
 
-func handleBlackjack(s *discordgo.Session, i *discordgo.InteractionCreate) {
+func handleBlackjack(s *discordgo.Session, i *discordgo.InteractionCreate, opts []*discordgo.ApplicationCommandInteractionDataOption) {
 	user := interactionUser(i)
 	if user == nil {
 		respondText(s, i, "Unable to identify user.")
 		return
 	}
-	opts := i.ApplicationCommandData().Options
 	bet := int(optionInt(opts, "bet", 10))
 	coins, _ := getCoins(user.ID)
 	if coins < bet {
@@ -182,7 +185,7 @@ func handleBlackjack(s *discordgo.Session, i *discordgo.InteractionCreate) {
 		Type: discordgo.InteractionResponseDeferredChannelMessageWithSource,
 	})
 	msg, err := s.FollowupMessageCreate(i.Interaction, true, &discordgo.WebhookParams{
-		Embeds:     []*discordgo.MessageEmbed{buildBJEmbed(sess, false)},
+		Embeds:     buildBJEmbeds(sess, false),
 		Components: buildBJButtons(true), // first turn: show Double Down
 	})
 	if err != nil {
@@ -205,14 +208,18 @@ func handleBlackjack(s *discordgo.Session, i *discordgo.InteractionCreate) {
 	}()
 }
 
-func buildBJEmbed(sess *bjSession, reveal bool) *discordgo.MessageEmbed {
+// bjGalleryURL is the shared embed URL that groups card images into a Discord gallery.
+const bjGalleryURL = "https://deckofcardsapi.com/bj"
+
+func buildBJEmbeds(sess *bjSession, reveal bool) []*discordgo.MessageEmbed {
 	dealerStr := sess.DealerHand[0] + " ??"
 	dealerVal := ""
 	if reveal {
 		dealerStr = handStr(sess.DealerHand)
 		dealerVal = fmt.Sprintf(" (%d)", handValue(sess.DealerHand))
 	}
-	return &discordgo.MessageEmbed{
+	main := &discordgo.MessageEmbed{
+		URL:   bjGalleryURL,
 		Title: "🃏 Blackjack",
 		Color: ColorPurple,
 		Fields: []*discordgo.MessageEmbedField{
@@ -223,6 +230,32 @@ func buildBJEmbed(sess *bjSession, reveal bool) *discordgo.MessageEmbed {
 		Footer:    &discordgo.MessageEmbedFooter{Text: "Discorbo"},
 		Timestamp: time.Now().Format(time.RFC3339),
 	}
+	// First player card goes on the main embed image
+	if len(sess.PlayerHand) > 0 {
+		main.Image = &discordgo.MessageEmbedImage{URL: cardImageURL(sess.PlayerHand[0])}
+	}
+	embeds := []*discordgo.MessageEmbed{main}
+	// Remaining player cards
+	for _, card := range sess.PlayerHand[1:] {
+		embeds = append(embeds, &discordgo.MessageEmbed{
+			URL:   bjGalleryURL,
+			Color: ColorPurple,
+			Image: &discordgo.MessageEmbedImage{URL: cardImageURL(card)},
+		})
+	}
+	// Dealer cards — first visible, rest hidden unless reveal
+	for idx, card := range sess.DealerHand {
+		imgURL := cardImageURL(card)
+		if !reveal && idx > 0 {
+			imgURL = cardImageURL("") // back of card
+		}
+		embeds = append(embeds, &discordgo.MessageEmbed{
+			URL:   bjGalleryURL,
+			Color: ColorGray,
+			Image: &discordgo.MessageEmbedImage{URL: imgURL},
+		})
+	}
+	return embeds
 }
 
 func buildBJButtons(firstTurn bool) []discordgo.MessageComponent {
@@ -269,19 +302,19 @@ func handleBJComponent(s *discordgo.Session, i *discordgo.InteractionCreate) {
 			delete(bjSessions, i.Message.ID)
 			gameMu.Unlock()
 			coins, _ := getCoins(user.ID)
-			embed := buildBJEmbed(sess, true)
-			embed.Color = ColorRed
-			embed.Description = fmt.Sprintf("💥 **Bust!** You went over 21.\nYou lose **%d coins**.\nBalance: **%d coins**", sess.Bet, coins)
+			embeds := buildBJEmbeds(sess, true)
+			embeds[0].Color = ColorRed
+			embeds[0].Description = fmt.Sprintf("💥 **Bust!** You went over 21.\nYou lose **%d coins**.\nBalance: **%d coins**", sess.Bet, coins)
 			_ = s.InteractionRespond(i.Interaction, &discordgo.InteractionResponse{
 				Type: discordgo.InteractionResponseUpdateMessage,
-				Data: &discordgo.InteractionResponseData{Embeds: []*discordgo.MessageEmbed{embed}, Components: []discordgo.MessageComponent{}},
+				Data: &discordgo.InteractionResponseData{Embeds: embeds, Components: []discordgo.MessageComponent{}},
 			})
 			return
 		}
 		gameMu.Unlock()
 		_ = s.InteractionRespond(i.Interaction, &discordgo.InteractionResponse{
 			Type: discordgo.InteractionResponseUpdateMessage,
-			Data: &discordgo.InteractionResponseData{Embeds: []*discordgo.MessageEmbed{buildBJEmbed(sess, false)}, Components: buildBJButtons(false)},
+			Data: &discordgo.InteractionResponseData{Embeds: buildBJEmbeds(sess, false), Components: buildBJButtons(false)},
 		})
 
 	case "double":
@@ -313,30 +346,30 @@ func handleBJComponent(s *discordgo.Session, i *discordgo.InteractionCreate) {
 
 		var result string
 		var newBal int
-		embed := buildBJEmbed(sess, true)
+		embeds := buildBJEmbeds(sess, true)
 		if pv > 21 {
-			embed.Color = ColorRed
+			embeds[0].Color = ColorRed
 			coins, _ := getCoins(user.ID)
 			result = fmt.Sprintf("💥 **Bust!** You lose **%d coins**.", sess.Bet)
 			newBal = coins
 		} else if dv > 21 || pv > dv {
 			newBal = modifyCoins(user.ID, user.Username, sess.Bet*2)
 			result = fmt.Sprintf("🎉 **You win!** +**%d coins**!", sess.Bet)
-			embed.Color = ColorGreen
+			embeds[0].Color = ColorGreen
 		} else if pv == dv {
 			newBal = modifyCoins(user.ID, user.Username, sess.Bet)
 			result = "🤝 **Push!** Bet refunded."
-			embed.Color = ColorGray
+			embeds[0].Color = ColorGray
 		} else {
 			coins, _ := getCoins(user.ID)
 			result = fmt.Sprintf("😞 **Dealer wins.** You lose **%d coins**.", sess.Bet)
-			embed.Color = ColorRed
+			embeds[0].Color = ColorRed
 			newBal = coins
 		}
-		embed.Description = result + fmt.Sprintf("\nBalance: **%d coins**", newBal)
+		embeds[0].Description = result + fmt.Sprintf("\nBalance: **%d coins**", newBal)
 		_ = s.InteractionRespond(i.Interaction, &discordgo.InteractionResponse{
 			Type: discordgo.InteractionResponseUpdateMessage,
-			Data: &discordgo.InteractionResponseData{Embeds: []*discordgo.MessageEmbed{embed}, Components: []discordgo.MessageComponent{}},
+			Data: &discordgo.InteractionResponseData{Embeds: embeds, Components: []discordgo.MessageComponent{}},
 		})
 
 	default:
@@ -366,13 +399,12 @@ func weightedSlot() string {
 	return slotsSymbols[0]
 }
 
-func handleSlots(s *discordgo.Session, i *discordgo.InteractionCreate) {
+func handleSlots(s *discordgo.Session, i *discordgo.InteractionCreate, opts []*discordgo.ApplicationCommandInteractionDataOption) {
 	user := interactionUser(i)
 	if user == nil {
 		respondText(s, i, "Unable to identify user.")
 		return
 	}
-	opts := i.ApplicationCommandData().Options
 	bet := int(optionInt(opts, "bet", 10))
 	coins, _ := getCoins(user.ID)
 	if coins < bet {
@@ -424,13 +456,12 @@ func handleSlots(s *discordgo.Session, i *discordgo.InteractionCreate) {
 
 // ─── Roulette ──────────────────────────────────────────────────────────────────
 
-func handleRoulette(s *discordgo.Session, i *discordgo.InteractionCreate) {
+func handleRoulette(s *discordgo.Session, i *discordgo.InteractionCreate, opts []*discordgo.ApplicationCommandInteractionDataOption) {
 	user := interactionUser(i)
 	if user == nil {
 		respondText(s, i, "Unable to identify user.")
 		return
 	}
-	opts := i.ApplicationCommandData().Options
 	bet := int(optionInt(opts, "bet", 10))
 	choice := strings.ToLower(optionString(opts, "choice", "red"))
 
@@ -522,13 +553,12 @@ var rrDeathTexts = []string{
 	"The chamber was loaded. Goodbye, brave soul.",
 }
 
-func handleRussianRoulette(s *discordgo.Session, i *discordgo.InteractionCreate) {
+func handleRussianRoulette(s *discordgo.Session, i *discordgo.InteractionCreate, opts []*discordgo.ApplicationCommandInteractionDataOption) {
 	user := interactionUser(i)
 	if user == nil {
 		respondText(s, i, "Unable to identify user.")
 		return
 	}
-	opts := i.ApplicationCommandData().Options
 	chambers := int(optionInt(opts, "chambers", 6))
 	if chambers < 2 || chambers > 6 {
 		chambers = 6
@@ -562,13 +592,12 @@ func handleRussianRoulette(s *discordgo.Session, i *discordgo.InteractionCreate)
 
 // ─── War ───────────────────────────────────────────────────────────────────────
 
-func handleWar(s *discordgo.Session, i *discordgo.InteractionCreate) {
+func handleWar(s *discordgo.Session, i *discordgo.InteractionCreate, opts []*discordgo.ApplicationCommandInteractionDataOption) {
 	user := interactionUser(i)
 	if user == nil {
 		respondText(s, i, "Unable to identify user.")
 		return
 	}
-	opts := i.ApplicationCommandData().Options
 	bet := int(optionInt(opts, "bet", 10))
 	coins, _ := getCoins(user.ID)
 	if coins < bet {
@@ -598,5 +627,7 @@ func handleWar(s *discordgo.Session, i *discordgo.InteractionCreate) {
 			fmt.Sprintf("**Your card:** %s (%d)\n**Bot's card:** %s (%d)\n\n🤝 Tie! Bet refunded.",
 				playerCard, pv, botCard, bv))
 	}
+	embed.Image = &discordgo.MessageEmbedImage{URL: cardImageURL(playerCard)}
+	embed.Thumbnail = &discordgo.MessageEmbedThumbnail{URL: cardImageURL(botCard)}
 	respondEmbed(s, i, embed)
 }

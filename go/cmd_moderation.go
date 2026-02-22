@@ -1647,3 +1647,48 @@ func handleModConfig(s *discordgo.Session, i *discordgo.InteractionCreate) {
 		handleAutomod(s, i, opts)
 	}
 }
+
+// handleModCmd is the top-level /mod group router.
+func handleModCmd(s *discordgo.Session, i *discordgo.InteractionCreate) {
+	opts := i.ApplicationCommandData().Options
+	if len(opts) == 0 {
+		return
+	}
+	sub := opts[0]
+	subOpts := sub.Options
+
+	switch sub.Name {
+	case "kick":
+		handleKick(s, i, subOpts)
+	case "ban":
+		handleBan(s, i, subOpts)
+	case "unban":
+		handleUnban(s, i, subOpts)
+	case "timeout":
+		handleTimeout(s, i, subOpts)
+	case "warn":
+		handleWarn(s, i, subOpts)
+	case "warnings":
+		handleWarnings(s, i, subOpts)
+	case "clearwarnings":
+		handleClearWarnings(s, i, subOpts)
+	case "purge":
+		handlePurge(s, i, subOpts)
+	case "lock":
+		handleLock(s, i, subOpts)
+	case "unlock":
+		handleUnlock(s, i, subOpts)
+	case "slowmode":
+		handleSlowmode(s, i, subOpts)
+	case "modlog":
+		handleModlog(s, i, subOpts)
+	case "automod":
+		handleAutomod(s, i, subOpts)
+	case "nick":
+		handleNick(s, i, subOpts)
+	case "role":
+		handleRole(s, i, subOpts)
+	case "announce":
+		handleAnnounce(s, i, subOpts)
+	}
+}
