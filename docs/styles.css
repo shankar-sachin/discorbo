@@ -635,10 +635,15 @@ section {
 }
 
 .footer-content {
-    display: grid;
-    grid-template-columns: 2fr 1fr 1fr 1fr;
+    display: flex;
+    justify-content: space-between;
     gap: 3rem;
     margin-bottom: 3rem;
+}
+
+.footer-links {
+    display: flex;
+    gap: 3rem;
 }
 
 .footer-logo {
@@ -753,7 +758,12 @@ section {
     }
 
     .footer-content {
-        grid-template-columns: 1fr;
+        flex-direction: column;
+        gap: 2rem;
+    }
+
+    .footer-links {
+        flex-direction: column;
         gap: 2rem;
     }
 
