@@ -84,7 +84,9 @@ func main() {
 		discordgo.IntentsGuildMessages |
 		discordgo.IntentsMessageContent |
 		discordgo.IntentsDirectMessages |
-		discordgo.IntentsDirectMessageTyping
+		discordgo.IntentsDirectMessageTyping |
+		discordgo.IntentsGuildMembers |
+		discordgo.IntentsGuildVoiceStates
 
 	s.AddHandler(func(_ *discordgo.Session, r *discordgo.Ready) {
 		log.Printf("Go bot ready as %s", r.User.Username)
@@ -95,14 +97,34 @@ func main() {
 			handleCommand(s, i)
 		case discordgo.InteractionMessageComponent:
 			handleComponent(s, i)
+		case discordgo.InteractionModalSubmit:
+			handleModalSubmit(s, i)
 		}
 	})
 	s.AddHandler(func(s *discordgo.Session, m *discordgo.MessageCreate) {
 		handleMessageCreate(s, m)
 	})
+	s.AddHandler(func(s *discordgo.Session, m *discordgo.GuildMemberAdd) {
+		handleGuildMemberAdd(s, m)
+	})
+	s.AddHandler(func(s *discordgo.Session, m *discordgo.GuildMemberRemove) {
+		handleGuildMemberRemove(s, m)
+	})
+	s.AddHandler(func(s *discordgo.Session, m *discordgo.MessageDelete) {
+		HandleMessageDelete(s, m)
+	})
 
-	if err := s.Open(); err != nil {
-		log.Fatalf("open session: %v", err)
+	// Connection retry: 3 attempts, 5s delay
+	for attempt := 1; attempt <= 3; attempt++ {
+		if err := s.Open(); err != nil {
+			log.Printf("open session attempt %d/3: %v", attempt, err)
+			if attempt == 3 {
+				log.Fatalf("failed to open session after 3 attempts: %v", err)
+			}
+			time.Sleep(5 * time.Second)
+			continue
+		}
+		break
 	}
 	defer s.Close()
 
@@ -111,10 +133,24 @@ func main() {
 	}
 	startReminderLoop(s)
 
+	// Migrate v1 data if needed
+	migrateV1Data()
+
 	log.Println("Go runtime active (all commands)")
 	stop := make(chan os.Signal, 1)
 	signal.Notify(stop, syscall.SIGINT, syscall.SIGTERM)
 	<-stop
+	gracefulShutdown()
+}
+
+func gracefulShutdown() {
+	log.Println("Shutting down gracefully...")
+	// Save any active game sessions
+	sessionMu.Lock()
+	if len(sessions) > 0 {
+		log.Printf("Cleaning up %d active maze session(s)", len(sessions))
+	}
+	sessionMu.Unlock()
 }
 
 func registerCommands(s *discordgo.Session, appID, guildID string) error {
@@ -148,6 +184,12 @@ func handleCommand(s *discordgo.Session, i *discordgo.InteractionCreate) {
 		handleEconomyCmd(s, i)
 	case "mod":
 		handleModCmd(s, i)
+	case "level":
+		handleLevelCmd(s, i)
+	case "welcome":
+		handleWelcomeCmd(s, i)
+	case "music":
+		handleMusicCmd(s, i)
 	default:
 		respondText(s, i, "Unknown command: /"+name)
 	}

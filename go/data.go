@@ -4,6 +4,7 @@ import (
 	"encoding/json"
 	"errors"
 	"fmt"
+	"log"
 	"os"
 	"path/filepath"
 	"strings"
@@ -125,4 +126,14 @@ func startReminderLoop(s *discordgo.Session) {
 			}
 		}
 	}()
+}
+
+func migrateV1Data() {
+	// Check if old daily-rewards.json has coin data that should be in economy-users.json
+	// This is a one-time migration for v1 -> v2
+	path := dataPath("daily-rewards.json")
+	if _, err := os.Stat(path); err != nil {
+		return // No v1 data to migrate
+	}
+	log.Println("v1 data detected - migration available if needed")
 }

@@ -9,6 +9,14 @@ import (
 	"github.com/bwmarrin/discordgo"
 )
 
+func handleModalSubmit(s *discordgo.Session, i *discordgo.InteractionCreate) {
+	data := i.ModalSubmitData()
+	if strings.HasPrefix(data.CustomID, "wordle_modal_") {
+		handleWordleModal(s, i)
+		return
+	}
+}
+
 func handleComponent(s *discordgo.Session, i *discordgo.InteractionCreate) {
 	user := interactionUser(i)
 	if user == nil {
@@ -54,6 +62,22 @@ func handleComponent(s *discordgo.Session, i *discordgo.InteractionCreate) {
 	}
 	if strings.HasPrefix(data.CustomID, "hl_") {
 		handleHLComponent(s, i)
+		return
+	}
+	if strings.HasPrefix(data.CustomID, "ttt_") {
+		handleTTTComponent(s, i)
+		return
+	}
+	if strings.HasPrefix(data.CustomID, "c4_") {
+		handleC4Component(s, i)
+		return
+	}
+	if strings.HasPrefix(data.CustomID, "wordle_") {
+		handleWordleComponent(s, i)
+		return
+	}
+	if data.CustomID == "truthordare_reroll" {
+		handleTruthOrDareButton(s, i)
 		return
 	}
 	if !strings.HasPrefix(data.CustomID, "maze_") {
@@ -247,6 +271,9 @@ func handleMessageCreate(s *discordgo.Session, m *discordgo.MessageCreate) {
 
 	// Check auto-moderation rules
 	CheckAutoMod(s, m)
+
+	// Award XP for leveling system
+	awardXP(s, m)
 
 	// Check for DMs or bot mentions and handle with AI
 	isDM := m.GuildID == ""

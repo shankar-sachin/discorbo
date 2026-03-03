@@ -452,8 +452,56 @@ func handleFunCmd(s *discordgo.Session, i *discordgo.InteractionCreate) {
 	case "8ball", "coinflip", "dice", "random-number", "random-choice", "rate",
 		"reverse-text", "mock-text", "flip-text", "rps", "roll":
 		handleSimpleFun(s, i, sub.Name, subOpts)
-	case "ship", "summon", "vibecheck", "would-you-rather", "hotseat":
+	case "ship", "summon":
 		handleInteractiveFun(s, i, sub.Name, subOpts)
+	// "creative" SubCommandGroup: ascii-art, countdown, emoji-mix, fake-tweet, fortune
+	case "creative":
+		if len(subOpts) == 0 {
+			return
+		}
+		innerSub := subOpts[0]
+		switch innerSub.Name {
+		case "ascii-art":
+			handleAsciiArt(s, i, innerSub.Options)
+		case "countdown":
+			handleCountdown(s, i, innerSub.Options)
+		case "emoji-mix":
+			handleEmojiMix(s, i, innerSub.Options)
+		case "fake-tweet":
+			handleFakeTweet(s, i, innerSub.Options)
+		case "fortune":
+			handleFortune(s, i)
+		}
+	// "social" SubCommandGroup: roast, compliment
+	case "social":
+		if len(subOpts) == 0 {
+			return
+		}
+		innerSub := subOpts[0]
+		switch innerSub.Name {
+		case "roast":
+			handleRoast(s, i, innerSub.Options)
+		case "compliment":
+			handleCompliment(s, i, innerSub.Options)
+		}
+	// "party" SubCommandGroup: truth-or-dare, this-or-that, would-you-rather
+	case "party":
+		if len(subOpts) == 0 {
+			return
+		}
+		innerSub := subOpts[0]
+		switch innerSub.Name {
+		case "truth-or-dare":
+			handleTruthOrDare(s, i)
+		case "this-or-that":
+			handleThisOrThat(s, i)
+		case "would-you-rather":
+			handleInteractiveFun(s, i, "would-you-rather", innerSub.Options)
+		case "hotseat":
+			handleInteractiveFun(s, i, "hotseat", innerSub.Options)
+		case "vibecheck":
+			handleInteractiveFun(s, i, "vibecheck", innerSub.Options)
+		}
 	case "joke", "meme":
 		handleAPIFun(s, i, sub.Name, subOpts)
 	// trivia is now a SubcommandGroup (play/leaderboard)

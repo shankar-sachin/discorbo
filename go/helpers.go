@@ -51,6 +51,17 @@ func respondEmbed(s *discordgo.Session, i *discordgo.InteractionCreate, e *disco
 	})
 }
 
+func respondError(s *discordgo.Session, i *discordgo.InteractionCreate, title, desc string) {
+	respondEmbed(s, i, createErrorEmbed(title, desc))
+}
+
+func respondEphemeral(s *discordgo.Session, i *discordgo.InteractionCreate, content string) {
+	_ = s.InteractionRespond(i.Interaction, &discordgo.InteractionResponse{
+		Type: discordgo.InteractionResponseChannelMessageWithSource,
+		Data: &discordgo.InteractionResponseData{Content: content, Flags: discordgo.MessageFlagsEphemeral},
+	})
+}
+
 // Enhanced embed creators
 func createSuccessEmbed(title, description string) *discordgo.MessageEmbed {
 	return &discordgo.MessageEmbed{
@@ -120,6 +131,76 @@ func createGameEmbed(title, description, thumbnailURL string) *discordgo.Message
 		e.Thumbnail = &discordgo.MessageEmbedThumbnail{URL: thumbnailURL}
 	}
 	return e
+}
+
+// Specialized embed creators for different categories
+const (
+	ColorCasino    = 0xFFD700 // Gold for casino
+	ColorEconomy   = 0x2ECC71 // Green for economy
+	ColorMod       = 0xE74C3C // Red for moderation
+	ColorLeveling  = 0x9B59B6 // Purple for leveling
+	ColorMusic     = 0x1DB954 // Spotify green for music
+	ColorWelcome   = 0xFF69B4 // Pink for welcome
+)
+
+func createCasinoEmbed(title, description string) *discordgo.MessageEmbed {
+	return &discordgo.MessageEmbed{
+		Title:       title,
+		Description: description,
+		Color:       ColorCasino,
+		Timestamp:   time.Now().Format(time.RFC3339),
+		Footer:      &discordgo.MessageEmbedFooter{Text: "🎰 Discorbo Casino"},
+	}
+}
+
+func createEconomyEmbed(title, description string) *discordgo.MessageEmbed {
+	return &discordgo.MessageEmbed{
+		Title:       title,
+		Description: description,
+		Color:       ColorEconomy,
+		Timestamp:   time.Now().Format(time.RFC3339),
+		Footer:      &discordgo.MessageEmbedFooter{Text: "💰 Discorbo Economy"},
+	}
+}
+
+func createModEmbed(title, description string) *discordgo.MessageEmbed {
+	return &discordgo.MessageEmbed{
+		Title:       title,
+		Description: description,
+		Color:       ColorMod,
+		Timestamp:   time.Now().Format(time.RFC3339),
+		Footer:      &discordgo.MessageEmbedFooter{Text: "🛡️ Discorbo Moderation"},
+	}
+}
+
+func createLevelEmbed(title, description string) *discordgo.MessageEmbed {
+	return &discordgo.MessageEmbed{
+		Title:       title,
+		Description: description,
+		Color:       ColorLeveling,
+		Timestamp:   time.Now().Format(time.RFC3339),
+		Footer:      &discordgo.MessageEmbedFooter{Text: "⭐ Discorbo Leveling"},
+	}
+}
+
+func createMusicEmbed(title, description string) *discordgo.MessageEmbed {
+	return &discordgo.MessageEmbed{
+		Title:       title,
+		Description: description,
+		Color:       ColorMusic,
+		Timestamp:   time.Now().Format(time.RFC3339),
+		Footer:      &discordgo.MessageEmbedFooter{Text: "🎵 Discorbo Music"},
+	}
+}
+
+func createWelcomeEmbed(title, description string) *discordgo.MessageEmbed {
+	return &discordgo.MessageEmbed{
+		Title:       title,
+		Description: description,
+		Color:       ColorWelcome,
+		Timestamp:   time.Now().Format(time.RFC3339),
+		Footer:      &discordgo.MessageEmbedFooter{Text: "👋 Discorbo"},
+	}
 }
 
 func deferReply(s *discordgo.Session, i *discordgo.InteractionCreate) {
@@ -627,12 +708,7 @@ func (p *mathParser) parsePower() (float64, error) {
 		if err != nil {
 			return 0, err
 		}
-		val := 1.0
-		exp := int(right)
-		for idx := 0; idx < exp; idx++ {
-			val *= left
-		}
-		left = val
+		left = math.Pow(left, right)
 	}
 	return left, nil
 }
@@ -757,6 +833,36 @@ var wyrQuestions = [][2]string{
 	{"Live without music", "Live without movies"},
 	{"Be able to teleport", "Be able to time travel"},
 	{"Fight one horse-sized duck", "Fight 100 duck-sized horses"},
+	{"Always have to whisper", "Always have to shout"},
+	{"Have no elbows", "Have no knees"},
+	{"Eat only spicy food forever", "Eat only bland food forever"},
+	{"Know every language", "Be able to play every instrument"},
+	{"Live in a treehouse", "Live in a houseboat"},
+	{"Have a rewind button for your life", "Have a pause button for your life"},
+	{"Never use social media again", "Never watch a movie again"},
+	{"Have a personal chef", "Have a personal chauffeur"},
+	{"Be famous for the wrong reasons", "Be unknown for the right reasons"},
+	{"Always feel too hot", "Always feel too cold"},
+	{"Have unlimited battery life on all devices", "Have unlimited WiFi everywhere"},
+	{"Talk to animals", "Speak every human language"},
+	{"Be stuck in a horror movie", "Be stuck in a rom-com"},
+	{"Never eat pizza again", "Never eat ice cream again"},
+	{"Have super strength", "Have super speed"},
+	{"Live 100 years in the past", "Live 100 years in the future"},
+	{"Be able to read minds", "Be able to see the future"},
+	{"Always be 10 minutes early", "Always be 10 minutes late"},
+	{"Have a personal robot butler", "Have a magical flying carpet"},
+	{"Win the lottery once", "Live twice as long"},
+	{"Never have to sleep", "Never have to eat"},
+	{"Be the funniest person alive", "Be the smartest person alive"},
+	{"Only be able to walk on all fours", "Only be able to walk sideways"},
+	{"Have a photographic memory", "Have the ability to forget anything at will"},
+	{"Be a famous actor", "Be a famous musician"},
+	{"Control fire", "Control water"},
+	{"Have unlimited money", "Have unlimited knowledge"},
+	{"Relive the same day forever", "Fast-forward to any point in time"},
+	{"Always know when someone is lying", "Always get away with lying"},
+	{"Be immune to hangovers", "Be immune to sickness"},
 }
 
 var questTemplates = []questEntry{

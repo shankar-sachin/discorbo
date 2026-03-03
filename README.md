@@ -1,44 +1,62 @@
 # Discorbo 🤖
 
-A comprehensive Discord bot with 32+ slash commands for fun, games, and utility. Built with Node.js and discord.js v14. Visit [the website](https://tinyurl.com/discorbo).
+A comprehensive Discord bot with 105+ slash commands for moderation, RPG, casino, economy, music, leveling, and community features. Built with Go and discordgo. Visit [the website](https://tinyurl.com/discorbo).
 
 ## Features
 
-### 🎮 Fun & Games (16 commands)
-- `/8ball` - Magic 8-ball predictions
-- `/coinflip` - Heads or tails
-- `/dice` - Roll dice (customizable sides)
-- `/rps` - Rock, Paper, Scissors game
-- `/joke` - Random jokes from JokeAPI
-- `/meme` - Fetch memes from Reddit
-- `/trivia` - Trivia questions with scoring
-- `/trivia-leaderboard` - Top trivia players
-- `/would-you-rather` - Random "would you rather" questions
-- `/random-number` - Generate random number
-- `/random-choice` - Pick from options
-- `/flip-text` - Upside-down text
-- `/mock-text` - aLtErNaTiNg CaPs
-- `/reverse-text` - Reverse text
-- `/rate` - Rate something out of 10
-- `/ship` - Compatibility calculator
+### 🎮 Fun & Games (30+ commands)
+- **Creative:** `/fun creative ascii-art`, `countdown`, `emoji-mix`, `fake-tweet`, `fortune`
+- **Social:** `/fun social roast`, `compliment`
+- **Party:** `/fun party truth-or-dare`, `this-or-that`, `would-you-rather`, `hotseat`, `vibecheck`
+- **Classic:** `/fun coinflip`, `dice`, `8ball`, `rps`, `joke`, `meme`, `trivia`, `roll`, `ship`, `summon`
 
-### 🛠️ Utility (17 commands)
-- `/help` - Command list and details
-- `/ping` - Bot latency check
-- `/avatar` - Display user avatar
-- `/userinfo` - User details
-- `/serverinfo` - Server statistics
-- `/poll` - Create reaction polls
-- `/remind` - Set reminders (30s, 2h, 1d)
-- `/reminders` - List/manage reminders
-- `/calc` - Math calculator
-- `/timer` - Countdown timer
-- `/afk` - Set AFK status with auto-response
-- `/translate` - Language translation
-- `/stats` - Bot statistics
-- `/role-info` - Role details
-- `/channel-info` - Channel details
-- `/clear-my-data` - GDPR compliance data removal
+### 🎲 Games (14 commands)
+- `/games 2048` - Sliding tile puzzle with Unicode board
+- `/games tictactoe` - Multiplayer tic-tac-toe
+- `/games connect4` - Connect Four with emoji board
+- `/games wordle` - 6-guess word game
+- `/games maze` - Navigate interactive mazes
+- `/games highlow` - Card guessing game
+- `/games war`, `snap`, `go-fish`, `tag`
+
+### 🎰 Casino (5 commands)
+- `/casino blackjack` - Classic 21 with compact card display
+- `/casino poker` - 5-card video poker
+- `/casino slots` - Weighted slot machine
+- `/casino roulette` - European roulette
+- `/casino russian-roulette` - Risk/reward game
+
+### 💰 Economy (16 commands)
+- `/economy balance`, `shop`, `inventory`, `trade`
+- `/economy daily` - Daily rewards with streaks
+- `/economy rob`, `gift`, `leaderboard`, `work`, `lottery`
+- `/economy admin` - Admin tools (grant, take, transactions)
+
+### 🛡️ Moderation (23 commands)
+- `/mod kick`, `ban`, `unban`, `timeout`, `warn`, `warnings`
+- `/mod purge`, `lock`, `unlock`, `slowmode`
+- `/mod automod` - Auto-moderation setup
+- `/mod softban`, `massban`, `history`, `case`, `reason`
+- `/mod report`, `reports`, `modnote`, `modlog`
+
+### 🛠️ Utility (23 commands)
+- `/util help`, `ping`, `avatar`, `userinfo`, `serverinfo`
+- `/util poll`, `remind`, `translate`, `calc`, `timer`
+- `/util color`, `define`, `github`, `snipe`, `weather`
+- `/util embed-builder`, `giveaway`, `sticky`
+
+### 🎵 Music (10 commands)
+- `/music play`, `pause`, `resume`, `skip`, `stop`
+- `/music queue`, `nowplaying`, `volume`, `shuffle`, `loop`
+
+### ⭐ Leveling (8 commands)
+- `/level` - View your level card with XP bar
+- `/level leaderboard`, `rewards`
+- Admin: `set-rewards`, `set-channel`, `toggle`, `reset`, `set-multiplier`
+
+### 👋 Welcome (6 commands)
+- `/welcome setup`, `set-leave`, `set-role`
+- `/welcome toggle`, `test`, `set-image`
 
 # Note: Do not publish Discorbo as your app, just invite the current one to your server [Discorbo](https://discord.com/oauth2/authorize?client_id=1472679226330059023&permissions=277025770560&scope=bot%20applications.commands)
 

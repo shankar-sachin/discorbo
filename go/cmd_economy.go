@@ -899,6 +899,314 @@ func handleEconomyCmd(s *discordgo.Session, i *discordgo.InteractionCreate) {
 		handleTrade(s, i, subOpts)
 	case "admin":
 		handleEconomyAdmin(s, i, subOpts)
+	case "rob":
+		handleRob(s, i, subOpts)
+	case "gift":
+		handleGift(s, i, subOpts)
+	case "leaderboard":
+		handleEconomyLeaderboard(s, i)
+	case "work":
+		handleWork(s, i)
+	case "lottery":
+		handleLottery(s, i, subOpts)
 	}
+}
+
+// ─── Rob ───────────────────────────────────────────────────────────────────────
+
+func handleRob(s *discordgo.Session, i *discordgo.InteractionCreate, opts []*discordgo.ApplicationCommandInteractionDataOption) {
+	user := interactionUser(i)
+	if user == nil {
+		respondText(s, i, "Unable to identify user.")
+		return
+	}
+
+	target := optionUser(opts, "user")
+	if target == nil {
+		respondText(s, i, "You must specify a user to rob.")
+		return
+	}
+	if target.Bot {
+		respondText(s, i, "You cannot rob bots.")
+		return
+	}
+	if target.ID == user.ID {
+		respondText(s, i, "You cannot rob yourself.")
+		return
+	}
+
+	// Check cooldown (5 minutes)
+	gameMu.Lock()
+	if cd, ok := robCooldowns[user.ID]; ok && time.Now().Unix() < cd {
+		remaining := cd - time.Now().Unix()
+		gameMu.Unlock()
+		respondEmbed(s, i, createErrorEmbed("⏳ Cooldown", fmt.Sprintf("You must wait **%d:%02d** before robbing again.", remaining/60, remaining%60)))
+		return
+	}
+	robCooldowns[user.ID] = time.Now().Unix() + 300
+	gameMu.Unlock()
+
+	targetCoins, _ := getCoins(target.ID)
+	if targetCoins < 50 {
+		respondEmbed(s, i, createErrorEmbed("🚫 Rob Failed", fmt.Sprintf("%s doesn't have enough coins to rob (need at least 50).", target.Username)))
+		return
+	}
+
+	// 40% success rate
+	if rand.Intn(100) < 40 {
+		// Success: steal 10-30% of target's coins, max 500
+		pct := 10 + rand.Intn(21) // 10-30
+		stolen := (targetCoins * pct) / 100
+		if stolen > 500 {
+			stolen = 500
+		}
+		if stolen < 1 {
+			stolen = 1
+		}
+		modifyCoins(target.ID, target.Username, -stolen)
+		newBal := modifyCoins(user.ID, user.Username, stolen)
+		respondEmbed(s, i, createSuccessEmbed("💰 Rob Successful!",
+			fmt.Sprintf("You stole **%d coins** (%d%%) from %s!\nYour balance: **%d coins**", stolen, pct, target.Username, newBal)))
+	} else {
+		// Fail: pay fine of 100 coins
+		fine := 100
+		myCoins, _ := getCoins(user.ID)
+		if myCoins < fine {
+			fine = myCoins
+		}
+		newBal := modifyCoins(user.ID, user.Username, -fine)
+		respondEmbed(s, i, createErrorEmbed("🚔 Rob Failed!",
+			fmt.Sprintf("You were caught trying to rob %s!\nYou paid a fine of **%d coins**.\nYour balance: **%d coins**", target.Username, fine, newBal)))
+	}
+}
+
+// ─── Gift ──────────────────────────────────────────────────────────────────────
+
+func handleGift(s *discordgo.Session, i *discordgo.InteractionCreate, opts []*discordgo.ApplicationCommandInteractionDataOption) {
+	user := interactionUser(i)
+	if user == nil {
+		respondText(s, i, "Unable to identify user.")
+		return
+	}
+
+	target := optionUser(opts, "user")
+	amount := int(optionInt(opts, "amount", 0))
+
+	if target == nil {
+		respondText(s, i, "You must specify a recipient.")
+		return
+	}
+	if target.Bot {
+		respondText(s, i, "You cannot gift coins to bots.")
+		return
+	}
+	if target.ID == user.ID {
+		respondText(s, i, "You cannot gift coins to yourself.")
+		return
+	}
+	if amount <= 0 {
+		respondText(s, i, "Gift amount must be positive.")
+		return
+	}
+
+	myCoins, _ := getCoins(user.ID)
+	if myCoins < amount {
+		respondEmbed(s, i, createErrorEmbed("Insufficient Funds", fmt.Sprintf("You only have **%d coins** but tried to gift **%d**.", myCoins, amount)))
+		return
+	}
+
+	modifyCoins(user.ID, user.Username, -amount)
+	modifyCoins(target.ID, target.Username, amount)
+
+	logTransaction(user.ID, "gift_sent", "", -amount, target.ID, fmt.Sprintf("Gift to %s", target.Username))
+	logTransaction(target.ID, "gift_received", "", amount, user.ID, fmt.Sprintf("Gift from %s", user.Username))
+
+	newBal, _ := getCoins(user.ID)
+	respondEmbed(s, i, createSuccessEmbed("🎁 Gift Sent!",
+		fmt.Sprintf("You gifted **%d coins** to %s!\nYour balance: **%d coins**", amount, target.Username, newBal)))
+}
+
+// ─── Leaderboard ───────────────────────────────────────────────────────────────
+
+func handleEconomyLeaderboard(s *discordgo.Session, i *discordgo.InteractionCreate) {
+	economyUsers := map[string]economyUser{}
+	_ = readData("economy-users.json", &economyUsers)
+
+	type entry struct {
+		UserID   string
+		Username string
+		Coins    int
+	}
+
+	entries := []entry{}
+	for id, u := range economyUsers {
+		entries = append(entries, entry{UserID: id, Username: u.Username, Coins: u.Coins})
+	}
+
+	sort.Slice(entries, func(a, b int) bool {
+		return entries[a].Coins > entries[b].Coins
+	})
+
+	if len(entries) > 10 {
+		entries = entries[:10]
+	}
+
+	if len(entries) == 0 {
+		respondText(s, i, "No users in the economy yet.")
+		return
+	}
+
+	medals := []string{"🥇", "🥈", "🥉", "4️⃣", "5️⃣", "6️⃣", "7️⃣", "8️⃣", "9️⃣", "🔟"}
+	lines := []string{}
+	for idx, e := range entries {
+		lines = append(lines, fmt.Sprintf("%s **%s** — %d coins", medals[idx], e.Username, e.Coins))
+	}
+
+	embed := &discordgo.MessageEmbed{
+		Title:       "🏆 Economy Leaderboard",
+		Description: strings.Join(lines, "\n"),
+		Color:       ColorEconomy,
+		Footer:      &discordgo.MessageEmbedFooter{Text: "Top 10 richest users"},
+		Timestamp:   time.Now().Format(time.RFC3339),
+	}
+	respondEmbed(s, i, embed)
+}
+
+// ─── Work ──────────────────────────────────────────────────────────────────────
+
+var workJobs = []string{
+	"👨‍💻 You worked as a freelance developer and debugged 47 lines of spaghetti code.",
+	"🍕 You delivered pizzas across town on a rainy night.",
+	"🎨 You painted a mural for the local community center.",
+	"📦 You sorted packages at the warehouse all afternoon.",
+	"🧹 You deep-cleaned an office building after hours.",
+	"🚗 You drove for a rideshare service during rush hour.",
+	"📸 You photographed a wedding and caught the perfect shot.",
+	"🎸 You busked on the street corner with your guitar.",
+	"🌿 You landscaped a neighbor's garden beautifully.",
+	"🐕 You walked 8 dogs simultaneously without tangling the leashes.",
+	"☕ You worked a busy morning shift at the coffee shop.",
+	"📚 You tutored students in math for the afternoon.",
+	"🔧 You fixed a leaky faucet and unclogged a drain.",
+	"🎤 You hosted a karaoke night at the local bar.",
+	"🧑‍🍳 You catered a company lunch for 50 people.",
+	"🏗️ You helped build a shed from scratch.",
+	"💇 You gave haircuts at the barbershop all day.",
+	"🎪 You performed magic tricks at a kids' birthday party.",
+	"🚚 You helped someone move apartments across the city.",
+	"🖥️ You set up a home network and fixed a printer.",
+	"🧑‍🔬 You assisted in a chemistry lab experiment.",
+	"📝 You transcribed 3 hours of meeting recordings.",
+}
+
+func handleWork(s *discordgo.Session, i *discordgo.InteractionCreate) {
+	user := interactionUser(i)
+	if user == nil {
+		respondText(s, i, "Unable to identify user.")
+		return
+	}
+
+	// Check cooldown (30 minutes)
+	gameMu.Lock()
+	if cd, ok := workCooldowns[user.ID]; ok && time.Now().Unix() < cd {
+		remaining := cd - time.Now().Unix()
+		gameMu.Unlock()
+		respondEmbed(s, i, createErrorEmbed("⏳ Cooldown", fmt.Sprintf("You must wait **%d:%02d** before working again.", remaining/60, remaining%60)))
+		return
+	}
+	workCooldowns[user.ID] = time.Now().Unix() + 1800
+	gameMu.Unlock()
+
+	earned := 50 + rand.Intn(151) // 50-200
+	job := workJobs[rand.Intn(len(workJobs))]
+	newBal := modifyCoins(user.ID, user.Username, earned)
+	logTransaction(user.ID, "work", "", earned, "", "Work earnings")
+
+	respondEmbed(s, i, createSuccessEmbed("💼 Work Complete!",
+		fmt.Sprintf("%s\n\nYou earned **%d coins**!\nBalance: **%d coins**", job, earned, newBal)))
+}
+
+// ─── Lottery ───────────────────────────────────────────────────────────────────
+
+func handleLottery(s *discordgo.Session, i *discordgo.InteractionCreate, opts []*discordgo.ApplicationCommandInteractionDataOption) {
+	user := interactionUser(i)
+	if user == nil {
+		respondText(s, i, "Unable to identify user.")
+		return
+	}
+
+	tickets := int(optionInt(opts, "tickets", 1))
+	if tickets < 1 || tickets > 10 {
+		respondText(s, i, "You can buy 1-10 tickets.")
+		return
+	}
+
+	cost := tickets * 10
+	myCoins, _ := getCoins(user.ID)
+	if myCoins < cost {
+		respondEmbed(s, i, createErrorEmbed("Insufficient Funds", fmt.Sprintf("You need **%d coins** but only have **%d**.", cost, myCoins)))
+		return
+	}
+
+	modifyCoins(user.ID, user.Username, -cost)
+
+	// Generate numbers: 3 user numbers, 3 draw numbers (1-10)
+	userNums := [3]int{rand.Intn(10) + 1, rand.Intn(10) + 1, rand.Intn(10) + 1}
+	drawNums := [3]int{rand.Intn(10) + 1, rand.Intn(10) + 1, rand.Intn(10) + 1}
+
+	// Count matches
+	matches := 0
+	used := [3]bool{}
+	for _, un := range userNums {
+		for j, dn := range drawNums {
+			if un == dn && !used[j] {
+				matches++
+				used[j] = true
+				break
+			}
+		}
+	}
+
+	var multiplier int
+	var resultText string
+	switch matches {
+	case 3:
+		multiplier = 100
+		resultText = "🎉🎉🎉 **JACKPOT!** All 3 numbers match!"
+	case 2:
+		multiplier = 10
+		resultText = "🎉🎉 **Great!** 2 numbers match!"
+	case 1:
+		multiplier = 2
+		resultText = "🎉 **Nice!** 1 number matches!"
+	default:
+		multiplier = 0
+		resultText = "😞 No matches. Better luck next time!"
+	}
+
+	winnings := cost * multiplier
+	var newBal int
+	if winnings > 0 {
+		newBal = modifyCoins(user.ID, user.Username, winnings)
+	} else {
+		newBal, _ = getCoins(user.ID)
+	}
+
+	embed := &discordgo.MessageEmbed{
+		Title: "🎰 Lottery",
+		Description: fmt.Sprintf("🎫 **Your numbers:** %d %d %d\n🎱 **Draw numbers:** %d %d %d\n\n%s",
+			userNums[0], userNums[1], userNums[2],
+			drawNums[0], drawNums[1], drawNums[2],
+			resultText),
+		Color: ColorPurple,
+		Fields: []*discordgo.MessageEmbedField{
+			{Name: "🎫 Tickets", Value: fmt.Sprintf("%d (cost: %d coins)", tickets, cost), Inline: true},
+			{Name: "💰 Winnings", Value: fmt.Sprintf("%d coins (%dx)", winnings, multiplier), Inline: true},
+			{Name: "💳 Balance", Value: fmt.Sprintf("%d coins", newBal), Inline: true},
+		},
+		Timestamp: time.Now().Format(time.RFC3339),
+		Footer:    &discordgo.MessageEmbedFooter{Text: "Discorbo Lottery"},
+	}
+	respondEmbed(s, i, embed)
 }
 

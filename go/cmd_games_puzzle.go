@@ -1,11 +1,8 @@
 package main
 
 import (
-	"encoding/json"
 	"fmt"
 	"math/rand"
-	"net/url"
-	"strconv"
 	"strings"
 	"time"
 
@@ -44,6 +41,12 @@ func handleGamesCmd(s *discordgo.Session, i *discordgo.InteractionCreate) {
 		handleGoFish(s, i, sub.Options)
 	case "tag":
 		handleTag(s, i, sub.Options)
+	case "tictactoe":
+		handleTicTacToe(s, i, sub.Options)
+	case "connect4":
+		handleConnect4(s, i, sub.Options)
+	case "wordle":
+		handleWordle(s, i)
 	}
 }
 
@@ -119,132 +122,32 @@ func update2048HighScore(userID string, score int) int {
 	return scores[userID]
 }
 
-// generate2048ImageURL builds a QuickChart matrix chart with official 2048 tile colors.
-func generate2048ImageURL(grid [4][4]int) string {
-	tileColor := func(v int) string {
-		switch v {
-		case 2:
-			return "#eee4da"
-		case 4:
-			return "#ede0c8"
-		case 8:
-			return "#f2b179"
-		case 16:
-			return "#f59563"
-		case 32:
-			return "#f67c5f"
-		case 64:
-			return "#f65e3b"
-		case 128:
-			return "#edcf72"
-		case 256:
-			return "#edcc61"
-		case 512:
-			return "#edc850"
-		case 1024:
-			return "#edc53f"
-		case 2048:
-			return "#edc22e"
-		default:
-			if v > 2048 {
-				return "#3c3a32"
-			}
-			return "#cdc1b4" // empty cell
-		}
-	}
-
-	type dp struct {
-		X float64 `json:"x"`
-		Y float64 `json:"y"`
-		V string  `json:"v"`
-	}
-
-	var points []dp
-	var bgColors []string
-	var textColors []string
-
-	for r := 0; r < 4; r++ {
-		for c := 0; c < 4; c++ {
-			v := grid[r][c]
-			vStr := ""
-			if v != 0 {
-				vStr = strconv.Itoa(v)
-			}
-			// y is inverted: row 0 = top (y=3.5), row 3 = bottom (y=0.5)
-			points = append(points, dp{X: float64(c) + 0.5, Y: float64(3-r) + 0.5, V: vStr})
-			bgColors = append(bgColors, tileColor(v))
-			if v <= 4 {
-				textColors = append(textColors, "#776e65")
-			} else {
-				textColors = append(textColors, "#f9f6f2")
-			}
-		}
-	}
-
-	cfg := map[string]interface{}{
-		"type": "matrix",
-		"data": map[string]interface{}{
-			"datasets": []map[string]interface{}{{
-				"data":            points,
-				"backgroundColor": bgColors,
-				"borderColor":     "#bbada0",
-				"borderWidth":     4,
-				"width":           "(ctx) => ctx.chart.chartArea ? ctx.chart.chartArea.width / 4 - 4 : 90",
-				"height":          "(ctx) => ctx.chart.chartArea ? ctx.chart.chartArea.height / 4 - 4 : 90",
-			}},
-		},
-		"options": map[string]interface{}{
-			"animation": false,
-			"plugins": map[string]interface{}{
-				"legend": map[string]interface{}{"display": false},
-				"datalabels": map[string]interface{}{
-					"display":   true,
-					"formatter": "(value) => value.v",
-					"color":     textColors,
-					"font": map[string]interface{}{
-						"size":   22,
-						"weight": "bold",
-					},
-				},
-			},
-			"scales": map[string]interface{}{
-				"x": map[string]interface{}{"display": false, "min": 0, "max": 4},
-				"y": map[string]interface{}{"display": false, "min": 0, "max": 4},
-			},
-		},
-	}
-
-	b, err := json.Marshal(cfg)
-	if err != nil {
-		return ""
-	}
-	return "https://quickchart.io/chart?w=400&h=400&bkg=%23bbada0&c=" + url.QueryEscape(string(b))
-}
 
 func build2048Embed(sess *g2048Session) *discordgo.MessageEmbed {
 	scores := map[string]int{}
 	_ = readData("2048-scores.json", &scores)
 	highScore := scores[sess.UserID]
 
+	board := render2048Board(sess.Grid)
+	tiles := render2048Emoji(sess.Grid)
+
+	description := tiles + "\n" + board
+
 	fields := []*discordgo.MessageEmbedField{
-		{Name: "Score", Value: fmt.Sprintf("%d", sess.Score), Inline: true},
+		{Name: "🏆 Score", Value: fmt.Sprintf("**%d**", sess.Score), Inline: true},
 	}
 	if highScore > 0 {
-		fields = append(fields, &discordgo.MessageEmbedField{Name: "High Score", Value: fmt.Sprintf("%d", highScore), Inline: true})
+		fields = append(fields, &discordgo.MessageEmbedField{Name: "👑 High Score", Value: fmt.Sprintf("**%d**", highScore), Inline: true})
 	}
 
-	imageURL := generate2048ImageURL(sess.Grid)
-	e := &discordgo.MessageEmbed{
-		Title:     "🟨 2048",
-		Color:     ColorYellow,
-		Fields:    fields,
-		Footer:    &discordgo.MessageEmbedFooter{Text: "Reach 2048 to win! | Discorbo"},
-		Timestamp: time.Now().Format(time.RFC3339),
+	return &discordgo.MessageEmbed{
+		Title:       "🟨 2048",
+		Description: description,
+		Color:       ColorYellow,
+		Fields:      fields,
+		Footer:      &discordgo.MessageEmbedFooter{Text: "Use the buttons to slide tiles! | Discorbo"},
+		Timestamp:   time.Now().Format(time.RFC3339),
 	}
-	if imageURL != "" {
-		e.Image = &discordgo.MessageEmbedImage{URL: imageURL}
-	}
-	return e
 }
 
 // keep strings import used elsewhere in the file
@@ -524,13 +427,13 @@ func buildHLEmbed(sess *hlSession, lastEvent string) *discordgo.MessageEmbed {
 
 	streakStr := ""
 	if sess.Streak >= 3 {
-		streakStr = fmt.Sprintf(" 🔥 x%d Streak!", sess.Streak)
+		streakStr = fmt.Sprintf(" 🔥 **x%d Streak!**", sess.Streak)
 	} else if sess.Streak > 0 {
 		streakStr = fmt.Sprintf(" (streak: %d)", sess.Streak)
 	}
 
-	desc := fmt.Sprintf("**Current card:** %s (value: %d)%s\n**Potential win:** %d coins (%.1fx)",
-		sess.CurrentCard, cardRankValue(sess.CurrentCard), streakStr, potentialWin, mult)
+	desc := fmt.Sprintf("**Current card:** %s%s\n\n💰 **Potential win:** %d coins (%.1fx)",
+		renderCard(sess.CurrentCard), streakStr, potentialWin, mult)
 	if lastEvent != "" {
 		desc += "\n\n" + lastEvent
 	}
@@ -539,9 +442,9 @@ func buildHLEmbed(sess *hlSession, lastEvent string) *discordgo.MessageEmbed {
 		Description: desc,
 		Color:       ColorBlue,
 		Fields: []*discordgo.MessageEmbedField{
-			{Name: "Bet", Value: fmt.Sprintf("%d coins", sess.Bet), Inline: true},
+			{Name: "💰 Bet", Value: fmt.Sprintf("**%d** coins", sess.Bet), Inline: true},
 		},
-		Footer:    &discordgo.MessageEmbedFooter{Text: "Guess correctly to multiply your winnings | Discorbo"},
+		Footer:    &discordgo.MessageEmbedFooter{Text: "Guess correctly to multiply winnings! | Discorbo"},
 		Timestamp: time.Now().Format(time.RFC3339),
 	}
 }
@@ -608,11 +511,12 @@ func handleHLComponent(s *discordgo.Session, i *discordgo.InteractionCreate) {
 	correct := (action == "higher" && nv > cv) || (action == "lower" && nv < cv)
 	tie := nv == cv
 
-	event := fmt.Sprintf("Next card: **%s** (value: %d)", nextCard, nv)
+	event := fmt.Sprintf("Next card: %s", renderCard(nextCard))
 
 	if tie {
-		// Tie = push, keep going
-		event += "\n🤝 **Tie!** Try again."
+		// Tie = push, draw new card and keep going
+		sess.CurrentCard = nextCard
+		event += "\n🤝 **Tie!** New card drawn. Try again."
 		gameMu.Unlock()
 		embed := buildHLEmbed(sess, event)
 		_ = s.InteractionRespond(i.Interaction, &discordgo.InteractionResponse{
@@ -651,4 +555,714 @@ func handleHLComponent(s *discordgo.Session, i *discordgo.InteractionCreate) {
 			Data: &discordgo.InteractionResponseData{Embeds: []*discordgo.MessageEmbed{embed}, Components: []discordgo.MessageComponent{}},
 		})
 	}
+}
+
+// ─── Tic-Tac-Toe ───────────────────────────────────────────────────────────────
+
+func handleTicTacToe(s *discordgo.Session, i *discordgo.InteractionCreate, opts []*discordgo.ApplicationCommandInteractionDataOption) {
+	user := interactionUser(i)
+	if user == nil {
+		respondText(s, i, "Unable to identify user.")
+		return
+	}
+	opponent := optionUser(opts, "opponent")
+	if opponent == nil {
+		respondText(s, i, "You must specify an opponent.")
+		return
+	}
+	if opponent.Bot {
+		respondText(s, i, "You cannot play against bots.")
+		return
+	}
+	if opponent.ID == user.ID {
+		respondText(s, i, "You cannot play against yourself.")
+		return
+	}
+
+	sess := &tttSession{
+		Player1ID:   user.ID,
+		Player1Name: user.Username,
+		Player2ID:   opponent.ID,
+		Player2Name: opponent.Username,
+		Board:       [3][3]int{},
+		CurrentTurn: 1,
+	}
+
+	_ = s.InteractionRespond(i.Interaction, &discordgo.InteractionResponse{
+		Type: discordgo.InteractionResponseDeferredChannelMessageWithSource,
+	})
+	msg, err := s.FollowupMessageCreate(i.Interaction, true, &discordgo.WebhookParams{
+		Embeds:     []*discordgo.MessageEmbed{buildTTTEmbed(sess, "")},
+		Components: buildTTTButtons(sess),
+	})
+	if err != nil {
+		return
+	}
+
+	sess.MessageID = msg.ID
+	sess.ChannelID = i.ChannelID
+
+	tttMu.Lock()
+	tttSessions[msg.ID] = sess
+	tttMu.Unlock()
+
+	go func() {
+		time.Sleep(5 * time.Minute)
+		tttMu.Lock()
+		delete(tttSessions, msg.ID)
+		tttMu.Unlock()
+	}()
+}
+
+func buildTTTEmbed(sess *tttSession, extra string) *discordgo.MessageEmbed {
+	board := renderTicTacToe(sess.Board)
+	currentName := sess.Player1Name
+	if sess.CurrentTurn == 2 {
+		currentName = sess.Player2Name
+	}
+	desc := fmt.Sprintf("%s\n\n❌ %s vs ⭕ %s\n🎯 **%s's turn**",
+		board, sess.Player1Name, sess.Player2Name, currentName)
+	if extra != "" {
+		desc += "\n\n" + extra
+	}
+	return &discordgo.MessageEmbed{
+		Title:       "❌⭕ Tic-Tac-Toe",
+		Description: desc,
+		Color:       ColorPurple,
+		Footer:      &discordgo.MessageEmbedFooter{Text: "Click a square to place your mark | Discorbo"},
+		Timestamp:   time.Now().Format(time.RFC3339),
+	}
+}
+
+func buildTTTButtons(sess *tttSession) []discordgo.MessageComponent {
+	rows := []discordgo.MessageComponent{}
+	for r := 0; r < 3; r++ {
+		btns := []discordgo.MessageComponent{}
+		for c := 0; c < 3; c++ {
+			label := "⬜"
+			disabled := false
+			if sess.Board[r][c] == 1 {
+				label = "❌"
+				disabled = true
+			} else if sess.Board[r][c] == 2 {
+				label = "⭕"
+				disabled = true
+			}
+			btns = append(btns, discordgo.Button{
+				Label:    label,
+				Style:    discordgo.SecondaryButton,
+				CustomID: fmt.Sprintf("ttt_%d_%d", r, c),
+				Disabled: disabled,
+			})
+		}
+		rows = append(rows, discordgo.ActionsRow{Components: btns})
+	}
+	return rows
+}
+
+func checkTTTWin(board [3][3]int, player int) bool {
+	for i := 0; i < 3; i++ {
+		if board[i][0] == player && board[i][1] == player && board[i][2] == player {
+			return true
+		}
+		if board[0][i] == player && board[1][i] == player && board[2][i] == player {
+			return true
+		}
+	}
+	if board[0][0] == player && board[1][1] == player && board[2][2] == player {
+		return true
+	}
+	if board[0][2] == player && board[1][1] == player && board[2][0] == player {
+		return true
+	}
+	return false
+}
+
+func isTTTFull(board [3][3]int) bool {
+	for r := 0; r < 3; r++ {
+		for c := 0; c < 3; c++ {
+			if board[r][c] == 0 {
+				return false
+			}
+		}
+	}
+	return true
+}
+
+func handleTTTComponent(s *discordgo.Session, i *discordgo.InteractionCreate) {
+	user := interactionUser(i)
+	if user == nil {
+		_ = s.InteractionRespond(i.Interaction, &discordgo.InteractionResponse{Type: discordgo.InteractionResponseDeferredMessageUpdate})
+		return
+	}
+
+	cid := i.MessageComponentData().CustomID
+	var r, c int
+	fmt.Sscanf(cid, "ttt_%d_%d", &r, &c)
+
+	tttMu.Lock()
+	sess, ok := tttSessions[i.Message.ID]
+	if !ok {
+		tttMu.Unlock()
+		_ = s.InteractionRespond(i.Interaction, &discordgo.InteractionResponse{Type: discordgo.InteractionResponseDeferredMessageUpdate})
+		return
+	}
+
+	expectedID := sess.Player1ID
+	if sess.CurrentTurn == 2 {
+		expectedID = sess.Player2ID
+	}
+	if user.ID != expectedID {
+		tttMu.Unlock()
+		_ = s.InteractionRespond(i.Interaction, &discordgo.InteractionResponse{
+			Type: discordgo.InteractionResponseChannelMessageWithSource,
+			Data: &discordgo.InteractionResponseData{Content: "It's not your turn!", Flags: discordgo.MessageFlagsEphemeral},
+		})
+		return
+	}
+
+	if r < 0 || r > 2 || c < 0 || c > 2 || sess.Board[r][c] != 0 {
+		tttMu.Unlock()
+		_ = s.InteractionRespond(i.Interaction, &discordgo.InteractionResponse{Type: discordgo.InteractionResponseDeferredMessageUpdate})
+		return
+	}
+
+	sess.Board[r][c] = sess.CurrentTurn
+
+	if checkTTTWin(sess.Board, sess.CurrentTurn) {
+		winnerName := sess.Player1Name
+		if sess.CurrentTurn == 2 {
+			winnerName = sess.Player2Name
+		}
+		delete(tttSessions, i.Message.ID)
+		tttMu.Unlock()
+		embed := buildTTTEmbed(sess, fmt.Sprintf("🎉 **%s wins!**", winnerName))
+		embed.Color = ColorGreen
+		_ = s.InteractionRespond(i.Interaction, &discordgo.InteractionResponse{
+			Type: discordgo.InteractionResponseUpdateMessage,
+			Data: &discordgo.InteractionResponseData{Embeds: []*discordgo.MessageEmbed{embed}, Components: []discordgo.MessageComponent{}},
+		})
+		return
+	}
+
+	if isTTTFull(sess.Board) {
+		delete(tttSessions, i.Message.ID)
+		tttMu.Unlock()
+		embed := buildTTTEmbed(sess, "🤝 **It's a draw!**")
+		embed.Color = ColorGray
+		_ = s.InteractionRespond(i.Interaction, &discordgo.InteractionResponse{
+			Type: discordgo.InteractionResponseUpdateMessage,
+			Data: &discordgo.InteractionResponseData{Embeds: []*discordgo.MessageEmbed{embed}, Components: []discordgo.MessageComponent{}},
+		})
+		return
+	}
+
+	if sess.CurrentTurn == 1 {
+		sess.CurrentTurn = 2
+	} else {
+		sess.CurrentTurn = 1
+	}
+	tttMu.Unlock()
+
+	_ = s.InteractionRespond(i.Interaction, &discordgo.InteractionResponse{
+		Type: discordgo.InteractionResponseUpdateMessage,
+		Data: &discordgo.InteractionResponseData{
+			Embeds:     []*discordgo.MessageEmbed{buildTTTEmbed(sess, "")},
+			Components: buildTTTButtons(sess),
+		},
+	})
+}
+
+// ─── Connect Four ──────────────────────────────────────────────────────────────
+
+func handleConnect4(s *discordgo.Session, i *discordgo.InteractionCreate, opts []*discordgo.ApplicationCommandInteractionDataOption) {
+	user := interactionUser(i)
+	if user == nil {
+		respondText(s, i, "Unable to identify user.")
+		return
+	}
+	opponent := optionUser(opts, "opponent")
+	if opponent == nil {
+		respondText(s, i, "You must specify an opponent.")
+		return
+	}
+	if opponent.Bot {
+		respondText(s, i, "You cannot play against bots.")
+		return
+	}
+	if opponent.ID == user.ID {
+		respondText(s, i, "You cannot play against yourself.")
+		return
+	}
+
+	sess := &c4Session{
+		Player1ID:   user.ID,
+		Player1Name: user.Username,
+		Player2ID:   opponent.ID,
+		Player2Name: opponent.Username,
+		Board:       [6][7]int{},
+		CurrentTurn: 1,
+	}
+
+	_ = s.InteractionRespond(i.Interaction, &discordgo.InteractionResponse{
+		Type: discordgo.InteractionResponseDeferredChannelMessageWithSource,
+	})
+	msg, err := s.FollowupMessageCreate(i.Interaction, true, &discordgo.WebhookParams{
+		Embeds:     []*discordgo.MessageEmbed{buildC4Embed(sess, "")},
+		Components: buildC4Buttons(sess),
+	})
+	if err != nil {
+		return
+	}
+
+	sess.MessageID = msg.ID
+	sess.ChannelID = i.ChannelID
+
+	c4Mu.Lock()
+	c4Sessions[msg.ID] = sess
+	c4Mu.Unlock()
+
+	go func() {
+		time.Sleep(10 * time.Minute)
+		c4Mu.Lock()
+		delete(c4Sessions, msg.ID)
+		c4Mu.Unlock()
+	}()
+}
+
+func buildC4Embed(sess *c4Session, extra string) *discordgo.MessageEmbed {
+	board := renderConnect4Board(sess.Board)
+	currentName := sess.Player1Name
+	if sess.CurrentTurn == 2 {
+		currentName = sess.Player2Name
+	}
+	desc := fmt.Sprintf("%s\n🔴 %s vs 🟡 %s\n🎯 **%s's turn**",
+		board, sess.Player1Name, sess.Player2Name, currentName)
+	if extra != "" {
+		desc += "\n\n" + extra
+	}
+	return &discordgo.MessageEmbed{
+		Title:       "🔴🟡 Connect Four",
+		Description: desc,
+		Color:       ColorPurple,
+		Footer:      &discordgo.MessageEmbedFooter{Text: "Click a column to drop your piece | Discorbo"},
+		Timestamp:   time.Now().Format(time.RFC3339),
+	}
+}
+
+func buildC4Buttons(sess *c4Session) []discordgo.MessageComponent {
+	colLabels := []string{"1️⃣", "2️⃣", "3️⃣", "4️⃣", "5️⃣", "6️⃣", "7️⃣"}
+	btns := []discordgo.MessageComponent{}
+	for c := 0; c < 7; c++ {
+		disabled := sess.Board[0][c] != 0
+		btns = append(btns, discordgo.Button{
+			Label:    colLabels[c],
+			Style:    discordgo.PrimaryButton,
+			CustomID: fmt.Sprintf("c4_%d", c),
+			Disabled: disabled,
+		})
+	}
+	return []discordgo.MessageComponent{
+		discordgo.ActionsRow{Components: btns[:5]},
+		discordgo.ActionsRow{Components: btns[5:]},
+	}
+}
+
+func c4DropPiece(board *[6][7]int, col, player int) int {
+	for r := 5; r >= 0; r-- {
+		if board[r][col] == 0 {
+			board[r][col] = player
+			return r
+		}
+	}
+	return -1
+}
+
+func checkC4Win(board [6][7]int, player int) bool {
+	for r := 0; r < 6; r++ {
+		for c := 0; c <= 3; c++ {
+			if board[r][c] == player && board[r][c+1] == player && board[r][c+2] == player && board[r][c+3] == player {
+				return true
+			}
+		}
+	}
+	for r := 0; r <= 2; r++ {
+		for c := 0; c < 7; c++ {
+			if board[r][c] == player && board[r+1][c] == player && board[r+2][c] == player && board[r+3][c] == player {
+				return true
+			}
+		}
+	}
+	for r := 0; r <= 2; r++ {
+		for c := 0; c <= 3; c++ {
+			if board[r][c] == player && board[r+1][c+1] == player && board[r+2][c+2] == player && board[r+3][c+3] == player {
+				return true
+			}
+		}
+	}
+	for r := 3; r < 6; r++ {
+		for c := 0; c <= 3; c++ {
+			if board[r][c] == player && board[r-1][c+1] == player && board[r-2][c+2] == player && board[r-3][c+3] == player {
+				return true
+			}
+		}
+	}
+	return false
+}
+
+func isC4Full(board [6][7]int) bool {
+	for c := 0; c < 7; c++ {
+		if board[0][c] == 0 {
+			return false
+		}
+	}
+	return true
+}
+
+func handleC4Component(s *discordgo.Session, i *discordgo.InteractionCreate) {
+	user := interactionUser(i)
+	if user == nil {
+		_ = s.InteractionRespond(i.Interaction, &discordgo.InteractionResponse{Type: discordgo.InteractionResponseDeferredMessageUpdate})
+		return
+	}
+
+	cid := i.MessageComponentData().CustomID
+	var col int
+	fmt.Sscanf(cid, "c4_%d", &col)
+
+	c4Mu.Lock()
+	sess, ok := c4Sessions[i.Message.ID]
+	if !ok {
+		c4Mu.Unlock()
+		_ = s.InteractionRespond(i.Interaction, &discordgo.InteractionResponse{Type: discordgo.InteractionResponseDeferredMessageUpdate})
+		return
+	}
+
+	expectedID := sess.Player1ID
+	if sess.CurrentTurn == 2 {
+		expectedID = sess.Player2ID
+	}
+	if user.ID != expectedID {
+		c4Mu.Unlock()
+		_ = s.InteractionRespond(i.Interaction, &discordgo.InteractionResponse{
+			Type: discordgo.InteractionResponseChannelMessageWithSource,
+			Data: &discordgo.InteractionResponseData{Content: "It's not your turn!", Flags: discordgo.MessageFlagsEphemeral},
+		})
+		return
+	}
+
+	if col < 0 || col > 6 {
+		c4Mu.Unlock()
+		_ = s.InteractionRespond(i.Interaction, &discordgo.InteractionResponse{Type: discordgo.InteractionResponseDeferredMessageUpdate})
+		return
+	}
+
+	row := c4DropPiece(&sess.Board, col, sess.CurrentTurn)
+	if row == -1 {
+		c4Mu.Unlock()
+		_ = s.InteractionRespond(i.Interaction, &discordgo.InteractionResponse{
+			Type: discordgo.InteractionResponseChannelMessageWithSource,
+			Data: &discordgo.InteractionResponseData{Content: "That column is full!", Flags: discordgo.MessageFlagsEphemeral},
+		})
+		return
+	}
+
+	if checkC4Win(sess.Board, sess.CurrentTurn) {
+		winnerName := sess.Player1Name
+		if sess.CurrentTurn == 2 {
+			winnerName = sess.Player2Name
+		}
+		delete(c4Sessions, i.Message.ID)
+		c4Mu.Unlock()
+		embed := buildC4Embed(sess, fmt.Sprintf("🎉 **%s wins!**", winnerName))
+		embed.Color = ColorGreen
+		_ = s.InteractionRespond(i.Interaction, &discordgo.InteractionResponse{
+			Type: discordgo.InteractionResponseUpdateMessage,
+			Data: &discordgo.InteractionResponseData{Embeds: []*discordgo.MessageEmbed{embed}, Components: []discordgo.MessageComponent{}},
+		})
+		return
+	}
+
+	if isC4Full(sess.Board) {
+		delete(c4Sessions, i.Message.ID)
+		c4Mu.Unlock()
+		embed := buildC4Embed(sess, "🤝 **It's a draw!**")
+		embed.Color = ColorGray
+		_ = s.InteractionRespond(i.Interaction, &discordgo.InteractionResponse{
+			Type: discordgo.InteractionResponseUpdateMessage,
+			Data: &discordgo.InteractionResponseData{Embeds: []*discordgo.MessageEmbed{embed}, Components: []discordgo.MessageComponent{}},
+		})
+		return
+	}
+
+	if sess.CurrentTurn == 1 {
+		sess.CurrentTurn = 2
+	} else {
+		sess.CurrentTurn = 1
+	}
+	c4Mu.Unlock()
+
+	_ = s.InteractionRespond(i.Interaction, &discordgo.InteractionResponse{
+		Type: discordgo.InteractionResponseUpdateMessage,
+		Data: &discordgo.InteractionResponseData{
+			Embeds:     []*discordgo.MessageEmbed{buildC4Embed(sess, "")},
+			Components: buildC4Buttons(sess),
+		},
+	})
+}
+
+// ─── Wordle ────────────────────────────────────────────────────────────────────
+
+var wordleWords = []string{
+	"apple", "brave", "charm", "dance", "eagle", "flame", "grace", "house",
+	"ivory", "jolly", "knife", "lemon", "magic", "noble", "ocean", "piano",
+	"queen", "river", "stone", "tiger", "unity", "vivid", "water", "youth",
+	"angel", "bloom", "crane", "drift", "ember", "frost", "globe", "hazel",
+	"input", "joker", "kneel", "lotus", "maple", "nerve", "olive", "pearl",
+	"quiet", "realm", "solar", "thorn", "ultra", "valve", "wheat", "xenon",
+	"yacht", "zebra", "blaze", "clash", "drown", "flair",
+}
+
+func handleWordle(s *discordgo.Session, i *discordgo.InteractionCreate) {
+	user := interactionUser(i)
+	if user == nil {
+		respondText(s, i, "Unable to identify user.")
+		return
+	}
+
+	word := wordleWords[rand.Intn(len(wordleWords))]
+	sess := &wordleSession{
+		UserID:  user.ID,
+		Word:    word,
+		Guesses: []string{},
+		Results: [][]int{},
+	}
+
+	_ = s.InteractionRespond(i.Interaction, &discordgo.InteractionResponse{
+		Type: discordgo.InteractionResponseDeferredChannelMessageWithSource,
+	})
+	msg, err := s.FollowupMessageCreate(i.Interaction, true, &discordgo.WebhookParams{
+		Embeds:     []*discordgo.MessageEmbed{buildWordleEmbed(sess, "")},
+		Components: buildWordleButtons(),
+	})
+	if err != nil {
+		return
+	}
+
+	sess.MessageID = msg.ID
+	sess.ChannelID = i.ChannelID
+
+	wordleMu.Lock()
+	wordleSessions[msg.ID] = sess
+	wordleMu.Unlock()
+
+	go func() {
+		time.Sleep(10 * time.Minute)
+		wordleMu.Lock()
+		delete(wordleSessions, msg.ID)
+		wordleMu.Unlock()
+	}()
+}
+
+func buildWordleEmbed(sess *wordleSession, extra string) *discordgo.MessageEmbed {
+	board := renderWordleBoard(sess.Guesses, sess.Results)
+	desc := fmt.Sprintf("%s\nGuesses: **%d/6**", board, len(sess.Guesses))
+	if extra != "" {
+		desc += "\n\n" + extra
+	}
+	return &discordgo.MessageEmbed{
+		Title:       "📝 Wordle",
+		Description: desc,
+		Color:       ColorPurple,
+		Footer:      &discordgo.MessageEmbedFooter{Text: "🟩 Correct | 🟨 Wrong position | ⬛ Not in word | Discorbo"},
+		Timestamp:   time.Now().Format(time.RFC3339),
+	}
+}
+
+func buildWordleButtons() []discordgo.MessageComponent {
+	return []discordgo.MessageComponent{
+		discordgo.ActionsRow{Components: []discordgo.MessageComponent{
+			discordgo.Button{Label: "✏️ Enter Guess", Style: discordgo.PrimaryButton, CustomID: "wordle_guess"},
+		}},
+	}
+}
+
+func evaluateWordle(guess, word string) []int {
+	results := make([]int, 5)
+	wordRunes := []rune(strings.ToLower(word))
+	guessRunes := []rune(strings.ToLower(guess))
+	used := [5]bool{}
+
+	// First pass: correct position
+	for i := 0; i < 5; i++ {
+		if guessRunes[i] == wordRunes[i] {
+			results[i] = 2
+			used[i] = true
+		}
+	}
+
+	// Second pass: wrong position
+	for i := 0; i < 5; i++ {
+		if results[i] == 2 {
+			continue
+		}
+		for j := 0; j < 5; j++ {
+			if !used[j] && guessRunes[i] == wordRunes[j] {
+				results[i] = 1
+				used[j] = true
+				break
+			}
+		}
+	}
+	return results
+}
+
+func handleWordleComponent(s *discordgo.Session, i *discordgo.InteractionCreate) {
+	user := interactionUser(i)
+	if user == nil {
+		_ = s.InteractionRespond(i.Interaction, &discordgo.InteractionResponse{Type: discordgo.InteractionResponseDeferredMessageUpdate})
+		return
+	}
+
+	wordleMu.Lock()
+	sess, ok := wordleSessions[i.Message.ID]
+	if !ok {
+		wordleMu.Unlock()
+		_ = s.InteractionRespond(i.Interaction, &discordgo.InteractionResponse{Type: discordgo.InteractionResponseDeferredMessageUpdate})
+		return
+	}
+	if sess.UserID != user.ID {
+		wordleMu.Unlock()
+		_ = s.InteractionRespond(i.Interaction, &discordgo.InteractionResponse{
+			Type: discordgo.InteractionResponseChannelMessageWithSource,
+			Data: &discordgo.InteractionResponseData{Content: "This isn't your game!", Flags: discordgo.MessageFlagsEphemeral},
+		})
+		return
+	}
+	wordleMu.Unlock()
+
+	_ = s.InteractionRespond(i.Interaction, &discordgo.InteractionResponse{
+		Type: discordgo.InteractionResponseModal,
+		Data: &discordgo.InteractionResponseData{
+			CustomID: fmt.Sprintf("wordle_modal_%s", i.Message.ID),
+			Title:    "Enter your guess",
+			Components: []discordgo.MessageComponent{
+				discordgo.ActionsRow{Components: []discordgo.MessageComponent{
+					discordgo.TextInput{
+						CustomID:    "wordle_input",
+						Label:       "5-letter word",
+						Style:       discordgo.TextInputShort,
+						Placeholder: "Enter a 5-letter word",
+						Required:    true,
+						MinLength:   5,
+						MaxLength:   5,
+					},
+				}},
+			},
+		},
+	})
+}
+
+func handleWordleModal(s *discordgo.Session, i *discordgo.InteractionCreate) {
+	data := i.ModalSubmitData()
+	parts := strings.Split(data.CustomID, "_")
+	if len(parts) < 3 {
+		return
+	}
+	msgID := parts[2]
+
+	guess := ""
+	for _, comp := range data.Components {
+		row, ok := comp.(*discordgo.ActionsRow)
+		if !ok {
+			continue
+		}
+		for _, c := range row.Components {
+			if ti, ok := c.(*discordgo.TextInput); ok && ti.CustomID == "wordle_input" {
+				guess = strings.ToLower(strings.TrimSpace(ti.Value))
+			}
+		}
+	}
+
+	if len([]rune(guess)) != 5 {
+		_ = s.InteractionRespond(i.Interaction, &discordgo.InteractionResponse{
+			Type: discordgo.InteractionResponseChannelMessageWithSource,
+			Data: &discordgo.InteractionResponseData{Content: "Please enter exactly 5 letters.", Flags: discordgo.MessageFlagsEphemeral},
+		})
+		return
+	}
+
+	wordleMu.Lock()
+	sess, ok := wordleSessions[msgID]
+	if !ok {
+		wordleMu.Unlock()
+		_ = s.InteractionRespond(i.Interaction, &discordgo.InteractionResponse{
+			Type: discordgo.InteractionResponseChannelMessageWithSource,
+			Data: &discordgo.InteractionResponseData{Content: "Game session expired.", Flags: discordgo.MessageFlagsEphemeral},
+		})
+		return
+	}
+
+	results := evaluateWordle(guess, sess.Word)
+	sess.Guesses = append(sess.Guesses, guess)
+	sess.Results = append(sess.Results, results)
+
+	won := true
+	for _, r := range results {
+		if r != 2 {
+			won = false
+			break
+		}
+	}
+
+	if won {
+		delete(wordleSessions, msgID)
+		wordleMu.Unlock()
+		embed := buildWordleEmbed(sess, fmt.Sprintf("🎉 **You got it in %d guesses!** The word was **%s**!", len(sess.Guesses), sess.Word))
+		embed.Color = ColorGreen
+		_ = s.InteractionRespond(i.Interaction, &discordgo.InteractionResponse{
+			Type: discordgo.InteractionResponseChannelMessageWithSource,
+			Data: &discordgo.InteractionResponseData{Content: "✅ Correct!", Flags: discordgo.MessageFlagsEphemeral},
+		})
+		_, _ = s.ChannelMessageEditComplex(&discordgo.MessageEdit{
+			Channel:    sess.ChannelID,
+			ID:         msgID,
+			Embeds:     &[]*discordgo.MessageEmbed{embed},
+			Components: &[]discordgo.MessageComponent{},
+		})
+		return
+	}
+
+	if len(sess.Guesses) >= 6 {
+		delete(wordleSessions, msgID)
+		wordleMu.Unlock()
+		embed := buildWordleEmbed(sess, fmt.Sprintf("💀 **Game over!** The word was **%s**.", sess.Word))
+		embed.Color = ColorRed
+		_ = s.InteractionRespond(i.Interaction, &discordgo.InteractionResponse{
+			Type: discordgo.InteractionResponseChannelMessageWithSource,
+			Data: &discordgo.InteractionResponseData{Content: "❌ Out of guesses!", Flags: discordgo.MessageFlagsEphemeral},
+		})
+		_, _ = s.ChannelMessageEditComplex(&discordgo.MessageEdit{
+			Channel:    sess.ChannelID,
+			ID:         msgID,
+			Embeds:     &[]*discordgo.MessageEmbed{embed},
+			Components: &[]discordgo.MessageComponent{},
+		})
+		return
+	}
+
+	wordleMu.Unlock()
+	_ = s.InteractionRespond(i.Interaction, &discordgo.InteractionResponse{
+		Type: discordgo.InteractionResponseChannelMessageWithSource,
+		Data: &discordgo.InteractionResponseData{
+			Content: fmt.Sprintf("Guess recorded: **%s** — %d/6 guesses used.", strings.ToUpper(guess), len(sess.Guesses)),
+			Flags:   discordgo.MessageFlagsEphemeral,
+		},
+	})
+	_, _ = s.ChannelMessageEditComplex(&discordgo.MessageEdit{
+		Channel:    sess.ChannelID,
+		ID:         msgID,
+		Embeds:     &[]*discordgo.MessageEmbed{buildWordleEmbed(sess, "")},
+		Components: &[]discordgo.MessageComponent{discordgo.ActionsRow{Components: []discordgo.MessageComponent{discordgo.Button{Label: "✏️ Enter Guess", Style: discordgo.PrimaryButton, CustomID: "wordle_guess"}}}},
+	})
 }
