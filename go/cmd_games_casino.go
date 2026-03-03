@@ -242,7 +242,7 @@ func buildBJButtons(firstTurn bool) []discordgo.MessageComponent {
 		discordgo.Button{Label: "✋ Stand", Style: discordgo.SecondaryButton, CustomID: "bj_stand"},
 	}
 	if firstTurn {
-		btns = append(btns, discordgo.Button{Label: "⬆️ Double Down", Style: discordgo.SuccessButton, CustomID: "bj_double"})
+		btns = append(btns, discordgo.Button{Label: "⬇️ Double Down", Style: discordgo.SuccessButton, CustomID: "bj_double"})
 	}
 	return []discordgo.MessageComponent{discordgo.ActionsRow{Components: btns}}
 }
