@@ -1,6 +1,6 @@
 {
   "name": "discorbo",
-  "version": "2.0.0",
+  "version": "2.1.0",
   "description": "A comprehensive Discord bot with 105+ slash commands including moderation, RPG, casino, economy, music, leveling, and community features",
   "main": "src/index.js",
   "scripts": {

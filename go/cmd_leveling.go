@@ -175,10 +175,15 @@ func handleLevelView(s *discordgo.Session, i *discordgo.InteractionCreate, opts 
 		fmt.Sprintf("💬 **Messages:** %d\n\n", userData.TotalMessages) +
 		fmt.Sprintf("**Progress to Level %d:**\n%s", userData.Level+1, xpBar)
 
-	embed := createLevelEmbed("📊 Level Card", desc)
-	if target.AvatarURL("64") != "" {
-		embed.Thumbnail = &discordgo.MessageEmbedThumbnail{URL: target.AvatarURL("64")}
-	}
+	embed := richEmbed(richEmbedOpts{
+		Title:        "📊 Level Card",
+		Description:  desc,
+		Color:        ColorLevel,
+		Category:     "⭐ Leveling",
+		ThumbnailURL: userAvatar(target),
+		AuthorName:   target.Username,
+		AuthorIcon:   userAvatar(target),
+	})
 	respondEmbed(s, i, embed)
 }
 
@@ -480,7 +485,8 @@ func announceLevelUp(s *discordgo.Session, m *discordgo.MessageCreate, guild lev
 		}
 	}
 
-	embed := createLevelEmbed("⬆️ Level Up!", desc)
+	embed := createLevelEmbed("🎊 Level Up!", desc)
+	embed.Thumbnail = &discordgo.MessageEmbedThumbnail{URL: m.Author.AvatarURL("128")}
 
 	channelID := guild.ChannelID
 	if channelID == "" {

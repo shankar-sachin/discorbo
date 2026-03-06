@@ -132,11 +132,13 @@ func main() {
 		log.Fatalf("register commands: %v", err)
 	}
 	startReminderLoop(s)
+	startCacheFlush()
+	startSessionCleanup()
 
 	// Migrate v1 data if needed
 	migrateV1Data()
 
-	log.Println("Go runtime active (all commands)")
+	log.Println("Discorbo v2.1 — Go runtime active (all commands)")
 	stop := make(chan os.Signal, 1)
 	signal.Notify(stop, syscall.SIGINT, syscall.SIGTERM)
 	<-stop
@@ -145,12 +147,119 @@ func main() {
 
 func gracefulShutdown() {
 	log.Println("Shutting down gracefully...")
-	// Save any active game sessions
+	flushAllCache()
 	sessionMu.Lock()
 	if len(sessions) > 0 {
 		log.Printf("Cleaning up %d active maze session(s)", len(sessions))
 	}
 	sessionMu.Unlock()
+}
+
+const sessionTTL = 5 * time.Minute
+
+// trackSession records when a session key was created for TTL cleanup.
+func trackSession(key string) {
+	sessionAgeMu.Lock()
+	sessionAge[key] = time.Now().Unix()
+	sessionAgeMu.Unlock()
+}
+
+func startSessionCleanup() {
+	go func() {
+		tick := time.NewTicker(60 * time.Second)
+		defer tick.Stop()
+		for range tick.C {
+			cutoff := time.Now().Add(-sessionTTL).Unix()
+			cleaned := 0
+
+			gameMu.Lock()
+			for k := range bjSessions {
+				if age, ok := sessionAge[k]; ok && age < cutoff {
+					delete(bjSessions, k)
+					cleaned++
+				}
+			}
+			for k := range pokerSessions {
+				if age, ok := sessionAge[k]; ok && age < cutoff {
+					delete(pokerSessions, k)
+					cleaned++
+				}
+			}
+			for k := range fishSessions {
+				if age, ok := sessionAge[k]; ok && age < cutoff {
+					delete(fishSessions, k)
+					cleaned++
+				}
+			}
+			for k := range snapSessions {
+				if age, ok := sessionAge[k]; ok && age < cutoff {
+					delete(snapSessions, k)
+					cleaned++
+				}
+			}
+			for k := range g2048Sessions {
+				if age, ok := sessionAge[k]; ok && age < cutoff {
+					delete(g2048Sessions, k)
+					cleaned++
+				}
+			}
+			for k := range hlSessions {
+				if age, ok := sessionAge[k]; ok && age < cutoff {
+					delete(hlSessions, k)
+					cleaned++
+				}
+			}
+			gameMu.Unlock()
+
+			tttMu.Lock()
+			for k := range tttSessions {
+				if age, ok := sessionAge[k]; ok && age < cutoff {
+					delete(tttSessions, k)
+					cleaned++
+				}
+			}
+			tttMu.Unlock()
+
+			c4Mu.Lock()
+			for k := range c4Sessions {
+				if age, ok := sessionAge[k]; ok && age < cutoff {
+					delete(c4Sessions, k)
+					cleaned++
+				}
+			}
+			c4Mu.Unlock()
+
+			wordleMu.Lock()
+			for k := range wordleSessions {
+				if age, ok := sessionAge[k]; ok && age < cutoff {
+					delete(wordleSessions, k)
+					cleaned++
+				}
+			}
+			wordleMu.Unlock()
+
+			sessionMu.Lock()
+			for k := range sessions {
+				if age, ok := sessionAge[k]; ok && age < cutoff {
+					delete(sessions, k)
+					cleaned++
+				}
+			}
+			sessionMu.Unlock()
+
+			// Clean up age tracker
+			if cleaned > 0 {
+				sessionAgeMu.Lock()
+				for k, age := range sessionAge {
+					if age < cutoff {
+						delete(sessionAge, k)
+					}
+				}
+				sessionAgeMu.Unlock()
+				log.Printf("session cleanup: removed %d expired session(s)", cleaned)
+			}
+		}
+	}()
 }
 
 func registerCommands(s *discordgo.Session, appID, guildID string) error {

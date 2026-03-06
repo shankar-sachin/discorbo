@@ -162,12 +162,12 @@ func render2048Emoji(grid [4][4]int) string {
 
 var slotSymbols = []string{"🍒", "🍋", "🍊", "🍇", "🔔", "💎", "7️⃣"}
 
-// renderSlotMachine shows a slot machine display.
+// renderSlotMachine shows a themed slot machine display.
 func renderSlotMachine(reels [3]string, spinning bool) string {
 	if spinning {
-		return "🎰 **|** ❓ **|** ❓ **|** ❓ **|**"
+		return "╔══════════════╗\n║  ❓ ┃ ❓ ┃ ❓  ║\n╚══════════════╝\n*Spinning...*"
 	}
-	return fmt.Sprintf("🎰 **|** %s **|** %s **|** %s **|**", reels[0], reels[1], reels[2])
+	return fmt.Sprintf("╔══════════════╗\n║  %s ┃ %s ┃ %s  ║\n╚══════════════╝", reels[0], reels[1], reels[2])
 }
 
 // ─── Generic Grid Rendering ────────────────────────────────────────────────────
@@ -198,18 +198,21 @@ func renderWarCards(playerCard, dealerCard string) string {
 
 // ─── Roulette Wheel ────────────────────────────────────────────────────────────
 
-// renderRouletteResult shows the roulette outcome.
+// renderRouletteResult shows the roulette outcome with visual flair.
 func renderRouletteResult(number int) string {
-	var color string
+	var color, label string
 	switch {
 	case number == 0:
 		color = "🟢"
+		label = "Green"
 	case isRouletteRed(number):
 		color = "🔴"
+		label = "Red"
 	default:
 		color = "⚫"
+		label = "Black"
 	}
-	return fmt.Sprintf("%s **%d**", color, number)
+	return fmt.Sprintf("🎡 The ball lands on...\n%s **%d** (%s)", color, number, label)
 }
 
 func isRouletteRed(n int) bool {
@@ -240,7 +243,7 @@ func renderChambers(total, current int) string {
 
 // ─── Progress Bars ─────────────────────────────────────────────────────────────
 
-// renderProgressBar creates a text progress bar.
+// renderProgressBar creates a themed text progress bar.
 func renderProgressBar(current, max int, length int) string {
 	if max <= 0 {
 		max = 1
@@ -253,28 +256,45 @@ func renderProgressBar(current, max int, length int) string {
 		filled = 0
 	}
 	empty := length - filled
-	return fmt.Sprintf("[%s%s] %d/%d",
-		strings.Repeat("█", filled),
-		strings.Repeat("░", empty),
-		current, max)
+	pct := (current * 100) / max
+	if pct > 100 {
+		pct = 100
+	}
+	return fmt.Sprintf("%s%s %d%%",
+		strings.Repeat("▰", filled),
+		strings.Repeat("▱", empty),
+		pct)
 }
 
-// renderHPBar creates a health bar for boss raids etc.
+// renderHPBar creates a health bar with color-coded prefix.
 func renderHPBar(current, max int) string {
-	return renderProgressBar(current, max, 20)
+	pct := 0
+	if max > 0 {
+		pct = (current * 100) / max
+	}
+	var icon string
+	switch {
+	case pct > 60:
+		icon = "💚"
+	case pct > 30:
+		icon = "💛"
+	default:
+		icon = "❤️"
+	}
+	return fmt.Sprintf("%s %s  (%d/%d)", icon, renderProgressBar(current, max, 16), current, max)
 }
 
 // renderXPBar creates an XP progress bar.
 func renderXPBar(current, max int) string {
-	return renderProgressBar(current, max, 15)
+	return fmt.Sprintf("⭐ %s  (%d/%d XP)", renderProgressBar(current, max, 12), current, max)
 }
 
 // ─── Connect4 Board ────────────────────────────────────────────────────────────
 
-// renderConnect4Board renders a 7x6 Connect Four board.
+// renderConnect4Board renders a 7x6 Connect Four board with frame.
 func renderConnect4Board(board [6][7]int) string {
 	var sb strings.Builder
-	// Column numbers
+	sb.WriteString("🔵 **Connect 4** 🔵\n")
 	sb.WriteString("1️⃣2️⃣3️⃣4️⃣5️⃣6️⃣7️⃣\n")
 	for r := 0; r < 6; r++ {
 		for c := 0; c < 7; c++ {
@@ -289,6 +309,7 @@ func renderConnect4Board(board [6][7]int) string {
 		}
 		sb.WriteString("\n")
 	}
+	sb.WriteString("▬▬▬▬▬▬▬▬▬▬▬▬▬▬")
 	return sb.String()
 }
 
@@ -315,7 +336,7 @@ func renderTicTacToe(board [3][3]int) string {
 
 // ─── Wordle Rendering ──────────────────────────────────────────────────────────
 
-// renderWordleRow shows a Wordle guess with colored squares.
+// renderWordleRow shows a Wordle guess with colored squares and letters.
 // results: 0=wrong, 1=wrong position (yellow), 2=correct (green)
 func renderWordleRow(guess string, results []int) string {
 	var sb strings.Builder
@@ -337,9 +358,10 @@ func renderWordleRow(guess string, results []int) string {
 	return sb.String()
 }
 
-// renderWordleBoard shows the full Wordle game board.
+// renderWordleBoard shows the full Wordle game board with attempt counter.
 func renderWordleBoard(guesses []string, results [][]int) string {
 	var sb strings.Builder
+	sb.WriteString(fmt.Sprintf("**Attempt %d/6**\n", len(guesses)))
 	for i, guess := range guesses {
 		if i < len(results) {
 			sb.WriteString(renderWordleRow(guess, results[i]))
@@ -349,6 +371,50 @@ func renderWordleBoard(guesses []string, results [][]int) string {
 	// Empty rows
 	for i := len(guesses); i < 6; i++ {
 		sb.WriteString("⬛⬛⬛⬛⬛\n")
+	}
+	// Keyboard tracker
+	if len(guesses) > 0 && len(results) > 0 {
+		used := map[byte]int{} // 0=wrong, 1=yellow, 2=green
+		for gi, guess := range guesses {
+			if gi >= len(results) {
+				break
+			}
+			for ci, r := range results[gi] {
+				if ci >= len(guess) {
+					break
+				}
+				ch := guess[ci]
+				if prev, ok := used[ch]; !ok || r > prev {
+					used[ch] = r
+				}
+			}
+		}
+		rows := []string{"QWERTYUIOP", "ASDFGHJKL", "ZXCVBNM"}
+		sb.WriteString("\n")
+		for _, row := range rows {
+			for _, ch := range row {
+				b := byte(ch)
+				lc := byte(ch) + 32 // lowercase
+				r, ok := used[lc]
+				if !ok {
+					r, ok = used[b]
+				}
+				letter := string(ch)
+				if !ok {
+					sb.WriteString("`" + letter + "`")
+				} else {
+					switch r {
+					case 2:
+						sb.WriteString("**" + letter + "**")
+					case 1:
+						sb.WriteString("*" + letter + "*")
+					default:
+						sb.WriteString("~~" + letter + "~~")
+					}
+				}
+			}
+			sb.WriteString("\n")
+		}
 	}
 	return sb.String()
 }

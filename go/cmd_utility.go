@@ -149,24 +149,29 @@ func handleHelp(s *discordgo.Session, i *discordgo.InteractionCreate, opts []*di
 		total += len(groups[g.key])
 	}
 
-	embed := &discordgo.MessageEmbed{
-		Title:       "🤖 Discorbo Commands",
-		Description: fmt.Sprintf("**%d subcommands** across %d groups. Use `/group subcommand`.", total, len(allGroups)),
+	embed := richEmbed(richEmbedOpts{
+		Title:       "🤖 Discorbo Command Center",
+		Description: fmt.Sprintf("**%d commands** across **%d categories**\nUse `/category subcommand` to run a command.", total, len(allGroups)),
 		Color:       ColorBlue,
-		Timestamp:   time.Now().Format(time.RFC3339),
-	}
+		Category:    "📖 Help",
+	})
 
 	for _, g := range allGroups {
 		if category != "all" && category != g.key {
 			continue
 		}
 		lines := groups[g.key]
-		value := "No commands found."
+		value := "*No commands found.*"
 		if len(lines) > 0 {
-			value = truncate(lines)
+			if category == "all" {
+				// In overview mode, show count only for brevity
+				value = fmt.Sprintf("**%d** commands — `/util help category:%s`", len(lines), g.key)
+			} else {
+				value = truncate(lines)
+			}
 		}
 		embed.Fields = append(embed.Fields, &discordgo.MessageEmbedField{
-			Name: fmt.Sprintf("%s /%s (%d)", g.icon, g.key, len(lines)), Value: value,
+			Name: fmt.Sprintf("%s %s (%d)", g.icon, g.label, len(lines)), Value: value,
 		})
 	}
 	respondEmbed(s, i, embed)
@@ -850,7 +855,6 @@ func handleClearMyData(s *discordgo.Session, i *discordgo.InteractionCreate, opt
 	}
 
 	clearUserKeyInObject("trivia-scores.json", user.ID)
-	clearUserKeyInObject("daily-rewards.json", user.ID)
 	clearUserKeyInObject("loot.json", user.ID)
 	clearUserKeyInObject("quests.json", user.ID)
 	clearUserKeyInObject("battle-stats.json", user.ID)

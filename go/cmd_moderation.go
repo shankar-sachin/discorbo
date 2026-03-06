@@ -97,10 +97,11 @@ func notifyUser(s *discordgo.Session, userID, action, reason, guildName string) 
 	}
 
 	embed := &discordgo.MessageEmbed{
-		Title:       fmt.Sprintf("You were %s from %s", action, guildName),
+		Title:       fmt.Sprintf("⚠️ You were %s from %s", action, guildName),
 		Description: fmt.Sprintf("**Reason:** %s", reason),
-		Color:       ColorRed,
+		Color:       ColorMod,
 		Timestamp:   time.Now().Format(time.RFC3339),
+		Footer:      embedFooter("🛡️ Moderation"),
 	}
 
 	_, err = s.ChannelMessageSendEmbed(ch.ID, embed)
@@ -125,16 +126,24 @@ func logModAction(s *discordgo.Session, guildID string, action modAction) {
 	}
 
 	// Create embed for mod log
+	actionColors := map[string]int{
+		"kick": 0xF39C12, "ban": ColorRed, "unban": ColorGreen,
+		"warn": ColorYellow, "timeout": 0xE67E22, "purge": ColorBlue,
+	}
+	color := ColorMod
+	if c, ok := actionColors[action.Type]; ok {
+		color = c
+	}
 	embed := &discordgo.MessageEmbed{
-		Title: fmt.Sprintf("🛡️ Moderation: %s", strings.ToUpper(action.Type)),
+		Title: fmt.Sprintf("🛡️ %s", strings.ToUpper(action.Type)),
 		Fields: []*discordgo.MessageEmbedField{
-			{Name: "User", Value: fmt.Sprintf("<@%s> (%s)", action.UserID, action.Username), Inline: true},
-			{Name: "Moderator", Value: fmt.Sprintf("<@%s>", action.ModeratorID), Inline: true},
-			{Name: "Reason", Value: action.Reason, Inline: false},
+			{Name: "👤 User", Value: fmt.Sprintf("<@%s> (%s)", action.UserID, action.Username), Inline: true},
+			{Name: "🔨 Moderator", Value: fmt.Sprintf("<@%s>", action.ModeratorID), Inline: true},
+			{Name: "📝 Reason", Value: action.Reason, Inline: false},
 		},
-		Color:     ColorYellow,
+		Color:     color,
 		Timestamp: time.Now().Format(time.RFC3339),
-		Footer:    &discordgo.MessageEmbedFooter{Text: fmt.Sprintf("ID: %s", action.ID)},
+		Footer:    &discordgo.MessageEmbedFooter{Text: fmt.Sprintf("Case #%s  •  %s", action.ID[:8], botVersion)},
 	}
 
 	// Add duration for timeouts
@@ -299,7 +308,7 @@ func handleKick(s *discordgo.Session, i *discordgo.InteractionCreate, opts []*di
 	logModAction(s, i.GuildID, action)
 
 	// Success response
-	embed := createSuccessEmbed("Member Kicked", fmt.Sprintf("**%s** has been kicked.\n**Reason:** %s", targetUser.Username, reason))
+	embed := createModEmbed("👢 Member Kicked", fmt.Sprintf("**%s** has been kicked.\n**Reason:** %s", targetUser.Username, reason))
 	respondEmbed(s, i, embed)
 }
 
@@ -410,7 +419,7 @@ func handleBan(s *discordgo.Session, i *discordgo.InteractionCreate, opts []*dis
 	if deleteDays > 0 {
 		deleteMsg = fmt.Sprintf("\n**Messages deleted:** Last %d day(s)", deleteDays)
 	}
-	embed := createSuccessEmbed("Member Banned", fmt.Sprintf("**%s** has been banned.\n**Reason:** %s%s", targetUser.Username, reason, deleteMsg))
+	embed := createModEmbed("🔨 Member Banned", fmt.Sprintf("**%s** has been banned.\n**Reason:** %s%s", targetUser.Username, reason, deleteMsg))
 	respondEmbed(s, i, embed)
 }
 
@@ -675,7 +684,7 @@ func handleWarn(s *discordgo.Session, i *discordgo.InteractionCreate, opts []*di
 	logModAction(s, i.GuildID, action)
 
 	// Success response
-	embed := createSuccessEmbed("Warning Issued", fmt.Sprintf("**%s** has been warned.\n**Reason:** %s\n**Total Warnings:** %d", targetUser.Username, reason, totalWarnings))
+	embed := createModEmbed("⚠️ Warning Issued", fmt.Sprintf("**%s** has been warned.\n**Reason:** %s\n**Total Warnings:** %d", targetUser.Username, reason, totalWarnings))
 	respondEmbed(s, i, embed)
 }
 
@@ -732,13 +741,13 @@ func handleWarnings(s *discordgo.Session, i *discordgo.InteractionCreate, opts [
 		warningsList += fmt.Sprintf("**#%d** - %s\n**Moderator:** %s\n**Reason:** %s\n\n", idx+1, timestamp, w.Moderator, w.Reason)
 	}
 
-	embed := &discordgo.MessageEmbed{
-		Title:       fmt.Sprintf("⚠️ Warnings for %s", targetUser.Username),
-		Description: fmt.Sprintf("**Total Warnings:** %d\n\n%s", len(userWarnings), warningsList),
-		Color:       ColorYellow,
-		Timestamp:   time.Now().Format(time.RFC3339),
-		Thumbnail:   &discordgo.MessageEmbedThumbnail{URL: userAvatar(targetUser)},
-	}
+	embed := richEmbed(richEmbedOpts{
+		Title:        fmt.Sprintf("⚠️ Warnings for %s", targetUser.Username),
+		Description:  fmt.Sprintf("**Total Warnings:** %d\n\n%s", len(userWarnings), warningsList),
+		Color:        ColorMod,
+		Category:     "🛡️ Moderation",
+		ThumbnailURL: userAvatar(targetUser),
+	})
 
 	respondEmbed(s, i, embed)
 }

@@ -218,6 +218,11 @@ type economyUser struct {
 	TradeHistory []tradeRecord   `json:"tradeHistory"`
 	TotalSpent   int             `json:"totalSpent"`
 	TotalEarned  int             `json:"totalEarned"`
+	// Migrated from dailyUser (v1 → v2)
+	LastClaim   int64 `json:"lastClaim,omitempty"`
+	Streak      int   `json:"streak,omitempty"`
+	TotalClaims int   `json:"totalClaims,omitempty"`
+	BossKills   int   `json:"bossKills,omitempty"`
 }
 
 type inventoryItem struct {
@@ -476,7 +481,6 @@ var (
 	botStartedAt   = time.Now()
 	sessionMu      sync.Mutex
 	sessions       = map[string]*mazeSession{}
-	dataMu         sync.Mutex
 	triviaMu       sync.Mutex
 	triviaSessions = map[string]triviaSession{}
 	tradeMu        sync.Mutex
@@ -501,6 +505,8 @@ var (
 	wordleSessions = map[string]*wordleSession{}
 	robCooldowns   = map[string]int64{} // userID → unix timestamp
 	workCooldowns  = map[string]int64{} // userID → unix timestamp
+	sessionAge     = map[string]int64{} // sessionKey → unix creation timestamp
+	sessionAgeMu   sync.Mutex
 )
 
 // Command definitions — all commands are grouped into 7 top-level slash commands.

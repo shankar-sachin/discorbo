@@ -1,11 +1,14 @@
 {
   "1070486338643706017": {
     "username": "sachinshankar",
-    "coins": 66999889,
+    "coins": 67000521,
     "inventory": null,
     "activeBoosts": null,
     "tradeHistory": null,
     "totalSpent": 0,
-    "totalEarned": 67000067
+    "totalEarned": 67000067,
+    "lastClaim": 1771640659508,
+    "streak": 2,
+    "totalClaims": 3
   }
 }

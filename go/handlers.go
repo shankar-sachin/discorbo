@@ -680,14 +680,14 @@ func handleTagComponent(s *discordgo.Session, i *discordgo.InteractionCreate) {
 					loserID = sess.Player1ID
 				}
 
-				// Update daily rewards
-				dailyUsers := map[string]dailyUser{}
-				_ = readData("daily-rewards.json", &dailyUsers)
-				du := dailyUsers[winnerID]
-				du.Coins += coins
-				du.Username = winner
-				dailyUsers[winnerID] = du
-				_ = writeData("daily-rewards.json", dailyUsers)
+				// Update economy
+				ecoUsers := map[string]economyUser{}
+				_ = readData("economy-users.json", &ecoUsers)
+				eu := ecoUsers[winnerID]
+				eu.Coins += coins
+				eu.Username = winner
+				ecoUsers[winnerID] = eu
+				_ = writeData("economy-users.json", ecoUsers)
 
 				// Update tag stats
 				tagStatsMap := map[string]tagStats{}
@@ -725,14 +725,14 @@ func handleTagComponent(s *discordgo.Session, i *discordgo.InteractionCreate) {
 				})
 
 				// Give both players 10 coins
-				dailyUsers := map[string]dailyUser{}
-				_ = readData("daily-rewards.json", &dailyUsers)
+				ecoUsers := map[string]economyUser{}
+				_ = readData("economy-users.json", &ecoUsers)
 				for _, pid := range []string{sess.Player1ID, sess.Player2ID} {
-					du := dailyUsers[pid]
-					du.Coins += 10
-					dailyUsers[pid] = du
+					eu := ecoUsers[pid]
+					eu.Coins += 10
+					ecoUsers[pid] = eu
 				}
-				_ = writeData("daily-rewards.json", dailyUsers)
+				_ = writeData("economy-users.json", ecoUsers)
 			}
 		} else {
 			buttons = buildTagButtons(sess.SessionID)

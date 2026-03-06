@@ -82,9 +82,13 @@ func handleShopList(s *discordgo.Session, i *discordgo.InteractionCreate, opts [
 	embed := &discordgo.MessageEmbed{
 		Title:       "🛒 Shop Catalog",
 		Description: description,
-		Color:       ColorPurple,
-		Footer:      &discordgo.MessageEmbedFooter{Text: "Use /shop buy <item_id> to purchase"},
+		Color:       ColorEconomy,
+		Timestamp:   time.Now().Format(time.RFC3339),
+		Footer:      embedFooter("💰 Economy"),
 	}
+	embed.Fields = append(embed.Fields, &discordgo.MessageEmbedField{
+		Name: "💡 How to Buy", Value: "Use `/economy shop buy <item_id>`", Inline: false,
+	})
 
 	respondEmbed(s, i, embed)
 }
@@ -130,13 +134,6 @@ func handleShopBuy(s *discordgo.Session, i *discordgo.InteractionCreate, opts []
 	}
 	ecoUser.Username = user.Username
 
-	// Sync coins from daily rewards
-	dailyUsers := map[string]dailyUser{}
-	_ = readData("daily-rewards.json", &dailyUsers)
-	if du, ok := dailyUsers[user.ID]; ok {
-		ecoUser.Coins = du.Coins
-	}
-
 	// Check max owned
 	if item.MaxOwned > 0 {
 		owned := 0
@@ -181,17 +178,6 @@ func handleShopBuy(s *discordgo.Session, i *discordgo.InteractionCreate, opts []
 
 	economyUsers[user.ID] = ecoUser
 	_ = writeData("economy-users.json", economyUsers)
-
-	// Sync coins back to daily rewards
-	dailyUsers[user.ID] = dailyUser{
-		Username:    user.Username,
-		Coins:       ecoUser.Coins,
-		LastClaim:   dailyUsers[user.ID].LastClaim,
-		Streak:      dailyUsers[user.ID].Streak,
-		TotalClaims: dailyUsers[user.ID].TotalClaims,
-		BossKills:   dailyUsers[user.ID].BossKills,
-	}
-	_ = writeData("daily-rewards.json", dailyUsers)
 
 	// Log transaction
 	logTransaction(user.ID, "purchase", itemID, -totalCost, "", "")
@@ -270,15 +256,6 @@ func handleShopSell(s *discordgo.Session, i *discordgo.InteractionCreate, opts [
 
 	economyUsers[user.ID] = ecoUser
 	_ = writeData("economy-users.json", economyUsers)
-
-	// Sync coins back to daily rewards
-	dailyUsers := map[string]dailyUser{}
-	_ = readData("daily-rewards.json", &dailyUsers)
-	du := dailyUsers[user.ID]
-	du.Coins = ecoUser.Coins
-	du.Username = user.Username
-	dailyUsers[user.ID] = du
-	_ = writeData("daily-rewards.json", dailyUsers)
 
 	// Log transaction
 	logTransaction(user.ID, "sell", itemID, refund, "", "")
@@ -458,15 +435,6 @@ func handleInventoryUse(s *discordgo.Session, i *discordgo.InteractionCreate, op
 		economyUsers[user.ID] = ecoUser
 		_ = writeData("economy-users.json", economyUsers)
 
-		// Sync coins
-		dailyUsers := map[string]dailyUser{}
-		_ = readData("daily-rewards.json", &dailyUsers)
-		du := dailyUsers[user.ID]
-		du.Coins = ecoUser.Coins
-		du.Username = user.Username
-		dailyUsers[user.ID] = du
-		_ = writeData("daily-rewards.json", dailyUsers)
-
 		embed := createSuccessEmbed("Mystery Box Opened!",
 			fmt.Sprintf("🎁 You received: **%s**\nNew balance: %d coins", reward, ecoUser.Coins))
 		respondEmbed(s, i, embed)
@@ -548,13 +516,6 @@ func handleBalance(s *discordgo.Session, i *discordgo.InteractionCreate) {
 	_ = readData("economy-users.json", &economyUsers)
 	ecoUser := economyUsers[user.ID]
 
-	// Sync from daily rewards
-	dailyUsers := map[string]dailyUser{}
-	_ = readData("daily-rewards.json", &dailyUsers)
-	if du, ok := dailyUsers[user.ID]; ok {
-		ecoUser.Coins = du.Coins
-	}
-
 	// Clean up expired boosts
 	activeBoosts := []activeBoost{}
 	now := time.Now().UnixMilli()
@@ -566,16 +527,16 @@ func handleBalance(s *discordgo.Session, i *discordgo.InteractionCreate) {
 	ecoUser.ActiveBoosts = activeBoosts
 
 	fields := []*discordgo.MessageEmbedField{
-		{Name: "💰 Balance", Value: fmt.Sprintf("%d coins", ecoUser.Coins), Inline: true},
-		{Name: "📈 Total Earned", Value: fmt.Sprintf("%d coins", ecoUser.TotalEarned), Inline: true},
-		{Name: "📉 Total Spent", Value: fmt.Sprintf("%d coins", ecoUser.TotalSpent), Inline: true},
-		{Name: "📦 Inventory Items", Value: fmt.Sprintf("%d", len(ecoUser.Inventory)), Inline: true},
+		{Name: "💰 Balance", Value: coinDisplay(ecoUser.Coins), Inline: true},
+		{Name: "📈 Total Earned", Value: coinDisplay(ecoUser.TotalEarned), Inline: true},
+		{Name: "📉 Total Spent", Value: coinDisplay(ecoUser.TotalSpent), Inline: true},
+		{Name: "📦 Inventory", Value: fmt.Sprintf("%d item(s)", len(ecoUser.Inventory)), Inline: true},
 	}
 
 	if len(ecoUser.ActiveBoosts) > 0 {
 		boostLines := []string{}
 		for _, boost := range ecoUser.ActiveBoosts {
-			boostLines = append(boostLines, fmt.Sprintf("• %.1fx %s (expires <t:%d:R>)",
+			boostLines = append(boostLines, fmt.Sprintf("⚡ **%.1fx** %s — expires <t:%d:R>",
 				boost.Multiplier, boost.BoostType, boost.ExpiresAt/1000))
 		}
 		fields = append(fields, &discordgo.MessageEmbedField{
@@ -585,14 +546,15 @@ func handleBalance(s *discordgo.Session, i *discordgo.InteractionCreate) {
 		})
 	}
 
-	embed := &discordgo.MessageEmbed{
-		Title:     fmt.Sprintf("💰 %s's Balance", user.Username),
-		Color:     ColorGreen,
-		Fields:    fields,
-		Timestamp: time.Now().Format(time.RFC3339),
-		Footer:    &discordgo.MessageEmbedFooter{Text: "Discorbo"},
-		Thumbnail: &discordgo.MessageEmbedThumbnail{URL: userAvatar(user)},
-	}
+	embed := richEmbed(richEmbedOpts{
+		Title:        fmt.Sprintf("💰 %s's Wallet", user.Username),
+		Color:        ColorEconomy,
+		Category:     "💰 Economy",
+		Fields:       fields,
+		ThumbnailURL: userAvatar(user),
+		AuthorName:   user.Username,
+		AuthorIcon:   userAvatar(user),
+	})
 
 	respondEmbed(s, i, embed)
 }
@@ -730,14 +692,6 @@ func handleEconomyAdmin(s *discordgo.Session, i *discordgo.InteractionCreate, op
 			return
 		}
 
-		dailyUsers := map[string]dailyUser{}
-		_ = readData("daily-rewards.json", &dailyUsers)
-		du := dailyUsers[targetUser.ID]
-		du.Username = targetUser.Username
-		du.Coins += coins
-		dailyUsers[targetUser.ID] = du
-		_ = writeData("daily-rewards.json", dailyUsers)
-
 		economyUsers := map[string]economyUser{}
 		_ = readData("economy-users.json", &economyUsers)
 		eu := economyUsers[targetUser.ID]
@@ -762,13 +716,6 @@ func handleEconomyAdmin(s *discordgo.Session, i *discordgo.InteractionCreate, op
 			respondText(s, i, "Valid user and positive coin amount required.")
 			return
 		}
-
-		dailyUsers := map[string]dailyUser{}
-		_ = readData("daily-rewards.json", &dailyUsers)
-		du := dailyUsers[targetUser.ID]
-		du.Coins = max(0, du.Coins-coins)
-		dailyUsers[targetUser.ID] = du
-		_ = writeData("daily-rewards.json", dailyUsers)
 
 		economyUsers := map[string]economyUser{}
 		_ = readData("economy-users.json", &economyUsers)
@@ -1059,16 +1006,18 @@ func handleEconomyLeaderboard(s *discordgo.Session, i *discordgo.InteractionCrea
 	medals := []string{"🥇", "🥈", "🥉", "4️⃣", "5️⃣", "6️⃣", "7️⃣", "8️⃣", "9️⃣", "🔟"}
 	lines := []string{}
 	for idx, e := range entries {
-		lines = append(lines, fmt.Sprintf("%s **%s** — %d coins", medals[idx], e.Username, e.Coins))
+		lines = append(lines, fmt.Sprintf("%s **%s** — %s", medals[idx], e.Username, coinDisplay(e.Coins)))
 	}
 
-	embed := &discordgo.MessageEmbed{
+	embed := richEmbed(richEmbedOpts{
 		Title:       "🏆 Economy Leaderboard",
 		Description: strings.Join(lines, "\n"),
 		Color:       ColorEconomy,
-		Footer:      &discordgo.MessageEmbedFooter{Text: "Top 10 richest users"},
-		Timestamp:   time.Now().Format(time.RFC3339),
-	}
+		Category:    "💰 Economy",
+	})
+	embed.Fields = append(embed.Fields, &discordgo.MessageEmbedField{
+		Name: "📊 Stats", Value: fmt.Sprintf("%d total user(s)", len(economyUsers)), Inline: false,
+	})
 	respondEmbed(s, i, embed)
 }
 

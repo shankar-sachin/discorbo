@@ -224,13 +224,13 @@ func buildBJEmbeds(sess *bjSession, reveal bool) []*discordgo.MessageEmbed {
 
 	embed := &discordgo.MessageEmbed{
 		Title: "🃏 Blackjack",
-		Color: ColorPurple,
+		Color: ColorCasino,
 		Fields: []*discordgo.MessageEmbedField{
 			{Name: fmt.Sprintf("🎯 Your Hand (%d)", playerVal), Value: playerCards, Inline: false},
 			{Name: "🏠 Dealer" + dealerValStr, Value: dealerCards, Inline: false},
-			{Name: "💰 Bet", Value: fmt.Sprintf("**%d** coins", sess.Bet), Inline: true},
+			{Name: "💰 Bet", Value: coinDisplay(sess.Bet), Inline: true},
 		},
-		Footer:    &discordgo.MessageEmbedFooter{Text: "Discorbo • Hit, Stand, or Double Down"},
+		Footer:    embedFooter("🎰 Casino"),
 		Timestamp: time.Now().Format(time.RFC3339),
 	}
 	return []*discordgo.MessageEmbed{embed}

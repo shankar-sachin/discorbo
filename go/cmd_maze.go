@@ -1,12 +1,9 @@
 package main
 
 import (
-	"encoding/json"
 	"errors"
 	"fmt"
 	"log"
-	"os"
-	"path/filepath"
 	"sort"
 	"strings"
 	"time"
@@ -320,40 +317,17 @@ func mazeComponents() []discordgo.MessageComponent {
 	}
 }
 
-func mazeScoresPath() string { return filepath.Join("..", "src", "data", "maze-scores.json") }
-
 func readMazeScores() (map[string]userMazeData, error) {
-	dataMu.Lock()
-	defer dataMu.Unlock()
-	path := mazeScoresPath()
-	_ = os.MkdirAll(filepath.Dir(path), 0o755)
-	if _, err := os.Stat(path); errors.Is(err, os.ErrNotExist) {
-		_ = os.WriteFile(path, []byte("{}"), 0o644)
-	}
-	raw, err := os.ReadFile(path)
-	if err != nil {
-		return nil, err
-	}
 	out := map[string]userMazeData{}
-	if strings.TrimSpace(string(raw)) == "" {
-		return out, nil
-	}
-	if err := json.Unmarshal(raw, &out); err != nil {
-		return map[string]userMazeData{}, nil
+	if err := readData("maze-scores.json", &out); err != nil {
+		return nil, err
 	}
 	return out, nil
 }
 
 func saveMazeCompletion(userID, username string, level, sec, coins int) {
-	dataMu.Lock()
-	defer dataMu.Unlock()
-	path := mazeScoresPath()
-	_ = os.MkdirAll(filepath.Dir(path), 0o755)
-	raw, _ := os.ReadFile(path)
 	all := map[string]userMazeData{}
-	if len(strings.TrimSpace(string(raw))) > 0 {
-		_ = json.Unmarshal(raw, &all)
-	}
+	_ = readData("maze-scores.json", &all)
 	u := all[userID]
 	if u.Username == "" {
 		u.Username = username
@@ -362,6 +336,5 @@ func saveMazeCompletion(userID, username string, level, sec, coins int) {
 	u.Completions = append(u.Completions, completion{Level: level, Time: sec, Coins: coins, Timestamp: time.Now().UnixMilli()})
 	u.TotalCoins += coins
 	all[userID] = u
-	out, _ := json.MarshalIndent(all, "", "  ")
-	_ = os.WriteFile(path, out, 0o644)
+	_ = writeData("maze-scores.json", all)
 }
