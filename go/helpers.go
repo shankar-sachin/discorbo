@@ -42,7 +42,7 @@ const (
 	ColorLoot    = 0xE1C16E // Antique gold for loot
 )
 
-const botVersion = "Discorbo v2.1"
+const botVersion = "Discorbo v2.2"
 
 func embedFooter(category string) *discordgo.MessageEmbedFooter {
 	if category == "" {
@@ -301,6 +301,72 @@ func streakDisplay(streak int) string {
 		return fmt.Sprintf("🔥 %d day(s)", streak)
 	default:
 		return "No streak"
+	}
+}
+
+// ── v2.2 Visual Helpers ─────────────────────────────────────────────
+
+const dividerLine = "▬▬▬▬▬▬▬▬▬▬▬▬▬▬▬▬▬▬▬▬"
+
+func divider() string { return dividerLine }
+
+// medalPrefix returns 🥇🥈🥉 for top 3, then #N for the rest.
+func medalPrefix(idx int) string {
+	switch idx {
+	case 0:
+		return "🥇"
+	case 1:
+		return "🥈"
+	case 2:
+		return "🥉"
+	default:
+		return fmt.Sprintf("`#%d`", idx+1)
+	}
+}
+
+// ratingBar returns a star-based rating bar like ⭐⭐⭐⭐⭐☆☆☆☆☆
+func ratingBar(value, max int) string {
+	if max <= 0 {
+		max = 10
+	}
+	if value < 0 {
+		value = 0
+	}
+	if value > max {
+		value = max
+	}
+	return strings.Repeat("⭐", value) + strings.Repeat("☆", max-value)
+}
+
+// miniField creates a compact inline embed field.
+func miniField(name, value string) *discordgo.MessageEmbedField {
+	return &discordgo.MessageEmbedField{Name: name, Value: value, Inline: true}
+}
+
+// wideField creates a full-width embed field.
+func wideField(name, value string) *discordgo.MessageEmbedField {
+	return &discordgo.MessageEmbedField{Name: name, Value: value, Inline: false}
+}
+
+// createPuzzleEmbed creates an embed themed for puzzle/board games.
+func createPuzzleEmbed(title, description string) *discordgo.MessageEmbed {
+	return &discordgo.MessageEmbed{
+		Title:       title,
+		Description: description,
+		Color:       0x3498DB, // Blue for puzzles
+		Timestamp:   time.Now().Format(time.RFC3339),
+		Footer:      embedFooter("🧩 Puzzle"),
+	}
+}
+
+// createUtilityEmbed creates an embed themed for utility commands.
+func createUtilityEmbed(title, description string) *discordgo.MessageEmbed {
+	return &discordgo.MessageEmbed{
+		Title:       title,
+		Description: description,
+		Color:       ColorBlue,
+		Timestamp:   time.Now().Format(time.RFC3339),
+		Footer:      embedFooter("🛠️ Utility"),
 	}
 }
 

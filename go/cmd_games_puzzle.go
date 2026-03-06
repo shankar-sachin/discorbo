@@ -55,7 +55,7 @@ func handleGamesCmd(s *discordgo.Session, i *discordgo.InteractionCreate) {
 func handle2048(s *discordgo.Session, i *discordgo.InteractionCreate) {
 	user := interactionUser(i)
 	if user == nil {
-		respondText(s, i, "Unable to identify user.")
+		respondError(s, i, "Error", "Unable to identify user.")
 		return
 	}
 
@@ -145,7 +145,7 @@ func build2048Embed(sess *g2048Session) *discordgo.MessageEmbed {
 		Description: description,
 		Color:       ColorYellow,
 		Fields:      fields,
-		Footer:      &discordgo.MessageEmbedFooter{Text: "Use the buttons to slide tiles! | Discorbo"},
+		Footer:      &discordgo.MessageEmbedFooter{Text: "Use the buttons to slide tiles!  •  " + botVersion},
 		Timestamp:   time.Now().Format(time.RFC3339),
 	}
 }
@@ -372,13 +372,13 @@ func has2048Moves(grid *[4][4]int) bool {
 func handleHighLow(s *discordgo.Session, i *discordgo.InteractionCreate, opts []*discordgo.ApplicationCommandInteractionDataOption) {
 	user := interactionUser(i)
 	if user == nil {
-		respondText(s, i, "Unable to identify user.")
+		respondError(s, i, "Error", "Unable to identify user.")
 		return
 	}
 	bet := int(optionInt(opts, "bet", 10))
 	coins, _ := getCoins(user.ID)
 	if coins < bet {
-		respondEmbed(s, i, createErrorEmbed("Insufficient Funds", fmt.Sprintf("You only have **%d coins** but tried to bet **%d**.", coins, bet)))
+		respondEmbed(s, i, createErrorEmbed("Insufficient Funds", fmt.Sprintf("You only have %s but tried to bet %s.", coinDisplay(coins), coinDisplay(bet))))
 		return
 	}
 	modifyCoins(user.ID, user.Username, -bet)
@@ -432,19 +432,19 @@ func buildHLEmbed(sess *hlSession, lastEvent string) *discordgo.MessageEmbed {
 		streakStr = fmt.Sprintf(" (streak: %d)", sess.Streak)
 	}
 
-	desc := fmt.Sprintf("**Current card:** %s%s\n\n💰 **Potential win:** %d coins (%.1fx)",
-		renderCard(sess.CurrentCard), streakStr, potentialWin, mult)
+	desc := fmt.Sprintf("**Current card:** %s%s\n\n💰 **Potential win:** %s (%.1fx)",
+		renderCard(sess.CurrentCard), streakStr, coinDisplay(potentialWin), mult)
 	if lastEvent != "" {
 		desc += "\n\n" + lastEvent
 	}
 	return &discordgo.MessageEmbed{
 		Title:       "🔢 Higher or Lower",
 		Description: desc,
-		Color:       ColorBlue,
+		Color:       ColorCasino,
 		Fields: []*discordgo.MessageEmbedField{
-			{Name: "💰 Bet", Value: fmt.Sprintf("**%d** coins", sess.Bet), Inline: true},
+			{Name: "💰 Bet", Value: coinDisplay(sess.Bet), Inline: true},
 		},
-		Footer:    &discordgo.MessageEmbedFooter{Text: "Guess correctly to multiply winnings! | Discorbo"},
+		Footer:    &discordgo.MessageEmbedFooter{Text: "Guess correctly to multiply winnings!  •  " + botVersion},
 		Timestamp: time.Now().Format(time.RFC3339),
 	}
 }
@@ -491,7 +491,7 @@ func handleHLComponent(s *discordgo.Session, i *discordgo.InteractionCreate) {
 		delete(hlSessions, i.Message.ID)
 		gameMu.Unlock()
 
-		embed := buildHLEmbed(sess, fmt.Sprintf("💰 **Cashed out!** +**%d coins** (%.1fx)\nBalance: **%d coins**", win, mult, newBal))
+		embed := buildHLEmbed(sess, fmt.Sprintf("💰 **Cashed out!** +%s (%.1fx)\nBalance: %s", coinDisplay(win), mult, coinDisplay(newBal)))
 		embed.Color = ColorGreen
 		_ = s.InteractionRespond(i.Interaction, &discordgo.InteractionResponse{
 			Type: discordgo.InteractionResponseUpdateMessage,
@@ -547,7 +547,7 @@ func handleHLComponent(s *discordgo.Session, i *discordgo.InteractionCreate) {
 		delete(hlSessions, i.Message.ID)
 		gameMu.Unlock()
 		coins, _ := getCoins(user.ID)
-		event += fmt.Sprintf("\n❌ **Wrong!** You lose **%d coins**.\nBalance: **%d coins**", sess.Bet, coins)
+		event += fmt.Sprintf("\n❌ **Wrong!** You lose %s.\nBalance: %s", coinDisplay(sess.Bet), coinDisplay(coins))
 		embed := buildHLEmbed(sess, event)
 		embed.Color = ColorRed
 		_ = s.InteractionRespond(i.Interaction, &discordgo.InteractionResponse{
@@ -562,20 +562,20 @@ func handleHLComponent(s *discordgo.Session, i *discordgo.InteractionCreate) {
 func handleTicTacToe(s *discordgo.Session, i *discordgo.InteractionCreate, opts []*discordgo.ApplicationCommandInteractionDataOption) {
 	user := interactionUser(i)
 	if user == nil {
-		respondText(s, i, "Unable to identify user.")
+		respondError(s, i, "Error", "Unable to identify user.")
 		return
 	}
 	opponent := optionUser(opts, "opponent")
 	if opponent == nil {
-		respondText(s, i, "You must specify an opponent.")
+		respondError(s, i, "Error", "You must specify an opponent.")
 		return
 	}
 	if opponent.Bot {
-		respondText(s, i, "You cannot play against bots.")
+		respondError(s, i, "Error", "You cannot play against bots.")
 		return
 	}
 	if opponent.ID == user.ID {
-		respondText(s, i, "You cannot play against yourself.")
+		respondError(s, i, "Error", "You cannot play against yourself.")
 		return
 	}
 
@@ -629,7 +629,7 @@ func buildTTTEmbed(sess *tttSession, extra string) *discordgo.MessageEmbed {
 		Title:       "❌⭕ Tic-Tac-Toe",
 		Description: desc,
 		Color:       ColorPurple,
-		Footer:      &discordgo.MessageEmbedFooter{Text: "Click a square to place your mark | Discorbo"},
+		Footer:      &discordgo.MessageEmbedFooter{Text: "Click a square to place your mark  •  " + botVersion},
 		Timestamp:   time.Now().Format(time.RFC3339),
 	}
 }
@@ -778,20 +778,20 @@ func handleTTTComponent(s *discordgo.Session, i *discordgo.InteractionCreate) {
 func handleConnect4(s *discordgo.Session, i *discordgo.InteractionCreate, opts []*discordgo.ApplicationCommandInteractionDataOption) {
 	user := interactionUser(i)
 	if user == nil {
-		respondText(s, i, "Unable to identify user.")
+		respondError(s, i, "Error", "Unable to identify user.")
 		return
 	}
 	opponent := optionUser(opts, "opponent")
 	if opponent == nil {
-		respondText(s, i, "You must specify an opponent.")
+		respondError(s, i, "Error", "You must specify an opponent.")
 		return
 	}
 	if opponent.Bot {
-		respondText(s, i, "You cannot play against bots.")
+		respondError(s, i, "Error", "You cannot play against bots.")
 		return
 	}
 	if opponent.ID == user.ID {
-		respondText(s, i, "You cannot play against yourself.")
+		respondError(s, i, "Error", "You cannot play against yourself.")
 		return
 	}
 
@@ -845,7 +845,7 @@ func buildC4Embed(sess *c4Session, extra string) *discordgo.MessageEmbed {
 		Title:       "🔴🟡 Connect Four",
 		Description: desc,
 		Color:       ColorPurple,
-		Footer:      &discordgo.MessageEmbedFooter{Text: "Click a column to drop your piece | Discorbo"},
+		Footer:      &discordgo.MessageEmbedFooter{Text: "Click a column to drop your piece  •  " + botVersion},
 		Timestamp:   time.Now().Format(time.RFC3339),
 	}
 }
@@ -1026,7 +1026,7 @@ var wordleWords = []string{
 func handleWordle(s *discordgo.Session, i *discordgo.InteractionCreate) {
 	user := interactionUser(i)
 	if user == nil {
-		respondText(s, i, "Unable to identify user.")
+		respondError(s, i, "Error", "Unable to identify user.")
 		return
 	}
 
@@ -1074,7 +1074,7 @@ func buildWordleEmbed(sess *wordleSession, extra string) *discordgo.MessageEmbed
 		Title:       "📝 Wordle",
 		Description: desc,
 		Color:       ColorPurple,
-		Footer:      &discordgo.MessageEmbedFooter{Text: "🟩 Correct | 🟨 Wrong position | ⬛ Not in word | Discorbo"},
+		Footer:      &discordgo.MessageEmbedFooter{Text: "🟩 Correct  •  🟨 Wrong position  •  ⬛ Not in word  •  " + botVersion},
 		Timestamp:   time.Now().Format(time.RFC3339),
 	}
 }

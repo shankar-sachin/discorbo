@@ -220,7 +220,7 @@ func generateID(prefix string) string {
 func handleKick(s *discordgo.Session, i *discordgo.InteractionCreate, opts []*discordgo.ApplicationCommandInteractionDataOption) {
 	user := interactionUser(i)
 	if user == nil {
-		respondText(s, i, "Unable to identify user.")
+		respondError(s, i, "Error", "Unable to identify user.")
 		return
 	}
 
@@ -241,12 +241,12 @@ func handleKick(s *discordgo.Session, i *discordgo.InteractionCreate, opts []*di
 
 	targetUser := optionUser(opts, "user")
 	if targetUser == nil {
-		respondText(s, i, "You must specify a user to kick.")
+		respondError(s, i, "Missing Input", "You must specify a user to kick.")
 		return
 	}
 
 	if targetUser.Bot {
-		respondText(s, i, "You cannot kick bots.")
+		respondError(s, i, "Invalid Target", "You cannot kick bots.")
 		return
 	}
 
@@ -258,13 +258,13 @@ func handleKick(s *discordgo.Session, i *discordgo.InteractionCreate, opts []*di
 	// Get members for hierarchy check
 	moderator, err := s.GuildMember(i.GuildID, user.ID)
 	if err != nil {
-		respondText(s, i, "Failed to fetch moderator information.")
+		respondError(s, i, "Error", "Failed to fetch moderator information.")
 		return
 	}
 
 	target, err := s.GuildMember(i.GuildID, targetUser.ID)
 	if err != nil {
-		respondText(s, i, "Failed to fetch target member information.")
+		respondError(s, i, "Error", "Failed to fetch target member information.")
 		return
 	}
 
@@ -319,7 +319,7 @@ func handleKick(s *discordgo.Session, i *discordgo.InteractionCreate, opts []*di
 func handleBan(s *discordgo.Session, i *discordgo.InteractionCreate, opts []*discordgo.ApplicationCommandInteractionDataOption) {
 	user := interactionUser(i)
 	if user == nil {
-		respondText(s, i, "Unable to identify user.")
+		respondError(s, i, "Error", "Unable to identify user.")
 		return
 	}
 
@@ -340,12 +340,12 @@ func handleBan(s *discordgo.Session, i *discordgo.InteractionCreate, opts []*dis
 
 	targetUser := optionUser(opts, "user")
 	if targetUser == nil {
-		respondText(s, i, "You must specify a user to ban.")
+		respondError(s, i, "Missing Input", "You must specify a user to ban.")
 		return
 	}
 
 	if targetUser.Bot {
-		respondText(s, i, "You cannot ban bots.")
+		respondError(s, i, "Invalid Target", "You cannot ban bots.")
 		return
 	}
 
@@ -365,7 +365,7 @@ func handleBan(s *discordgo.Session, i *discordgo.InteractionCreate, opts []*dis
 	// Get members for hierarchy check
 	moderator, err := s.GuildMember(i.GuildID, user.ID)
 	if err != nil {
-		respondText(s, i, "Failed to fetch moderator information.")
+		respondError(s, i, "Error", "Failed to fetch moderator information.")
 		return
 	}
 
@@ -430,7 +430,7 @@ func handleBan(s *discordgo.Session, i *discordgo.InteractionCreate, opts []*dis
 func handleUnban(s *discordgo.Session, i *discordgo.InteractionCreate, opts []*discordgo.ApplicationCommandInteractionDataOption) {
 	user := interactionUser(i)
 	if user == nil {
-		respondText(s, i, "Unable to identify user.")
+		respondError(s, i, "Error", "Unable to identify user.")
 		return
 	}
 
@@ -443,7 +443,7 @@ func handleUnban(s *discordgo.Session, i *discordgo.InteractionCreate, opts []*d
 
 	userID := optionString(opts, "user_id", "")
 	if userID == "" {
-		respondText(s, i, "You must specify a user ID to unban.")
+		respondError(s, i, "Missing Input", "You must specify a user ID to unban.")
 		return
 	}
 
@@ -486,7 +486,7 @@ func handleUnban(s *discordgo.Session, i *discordgo.InteractionCreate, opts []*d
 func handleTimeout(s *discordgo.Session, i *discordgo.InteractionCreate, opts []*discordgo.ApplicationCommandInteractionDataOption) {
 	user := interactionUser(i)
 	if user == nil {
-		respondText(s, i, "Unable to identify user.")
+		respondError(s, i, "Error", "Unable to identify user.")
 		return
 	}
 
@@ -499,24 +499,24 @@ func handleTimeout(s *discordgo.Session, i *discordgo.InteractionCreate, opts []
 
 	targetUser := optionUser(opts, "user")
 	if targetUser == nil {
-		respondText(s, i, "You must specify a user to timeout.")
+		respondError(s, i, "Missing Input", "You must specify a user to timeout.")
 		return
 	}
 
 	if targetUser.Bot {
-		respondText(s, i, "You cannot timeout bots.")
+		respondError(s, i, "Invalid Target", "You cannot timeout bots.")
 		return
 	}
 
 	duration := optionString(opts, "duration", "")
 	if duration == "" {
-		respondText(s, i, "You must specify a duration.")
+		respondError(s, i, "Invalid Input", "You must specify a duration.")
 		return
 	}
 
 	durationSeconds := parseDuration(duration)
 	if durationSeconds == 0 || durationSeconds > 28*86400 {
-		respondText(s, i, "Invalid duration. Max is 28 days.")
+		respondError(s, i, "Invalid Input", "Invalid duration. Max is 28 days.")
 		return
 	}
 
@@ -528,13 +528,13 @@ func handleTimeout(s *discordgo.Session, i *discordgo.InteractionCreate, opts []
 	// Get members for hierarchy check
 	moderator, err := s.GuildMember(i.GuildID, user.ID)
 	if err != nil {
-		respondText(s, i, "Failed to fetch moderator information.")
+		respondError(s, i, "Error", "Failed to fetch moderator information.")
 		return
 	}
 
 	target, err := s.GuildMember(i.GuildID, targetUser.ID)
 	if err != nil {
-		respondText(s, i, "Failed to fetch target member information.")
+		respondError(s, i, "Error", "Failed to fetch target member information.")
 		return
 	}
 
@@ -593,7 +593,7 @@ func handleTimeout(s *discordgo.Session, i *discordgo.InteractionCreate, opts []
 func handleWarn(s *discordgo.Session, i *discordgo.InteractionCreate, opts []*discordgo.ApplicationCommandInteractionDataOption) {
 	user := interactionUser(i)
 	if user == nil {
-		respondText(s, i, "Unable to identify user.")
+		respondError(s, i, "Error", "Unable to identify user.")
 		return
 	}
 
@@ -606,18 +606,18 @@ func handleWarn(s *discordgo.Session, i *discordgo.InteractionCreate, opts []*di
 
 	targetUser := optionUser(opts, "user")
 	if targetUser == nil {
-		respondText(s, i, "You must specify a user to warn.")
+		respondError(s, i, "Missing Input", "You must specify a user to warn.")
 		return
 	}
 
 	if targetUser.Bot {
-		respondText(s, i, "You cannot warn bots.")
+		respondError(s, i, "Invalid Target", "You cannot warn bots.")
 		return
 	}
 
 	reason := optionString(opts, "reason", "")
 	if reason == "" {
-		respondText(s, i, "You must provide a reason for the warning.")
+		respondError(s, i, "Missing Input", "You must provide a reason for the warning.")
 		return
 	}
 
@@ -665,6 +665,7 @@ func handleWarn(s *discordgo.Session, i *discordgo.InteractionCreate, opts []*di
 			Description: fmt.Sprintf("**Reason:** %s\n**Total Warnings:** %d", reason, totalWarnings),
 			Color:       ColorYellow,
 			Timestamp:   time.Now().Format(time.RFC3339),
+			Footer:      embedFooter("🛡️ Moderation"),
 		}
 		_, _ = s.ChannelMessageSendEmbed(ch.ID, embed)
 	}
@@ -695,7 +696,7 @@ func handleWarn(s *discordgo.Session, i *discordgo.InteractionCreate, opts []*di
 func handleWarnings(s *discordgo.Session, i *discordgo.InteractionCreate, opts []*discordgo.ApplicationCommandInteractionDataOption) {
 	user := interactionUser(i)
 	if user == nil {
-		respondText(s, i, "Unable to identify user.")
+		respondError(s, i, "Error", "Unable to identify user.")
 		return
 	}
 
@@ -708,7 +709,7 @@ func handleWarnings(s *discordgo.Session, i *discordgo.InteractionCreate, opts [
 
 	targetUser := optionUser(opts, "user")
 	if targetUser == nil {
-		respondText(s, i, "You must specify a user.")
+		respondError(s, i, "Missing Input", "You must specify a user.")
 		return
 	}
 
@@ -759,7 +760,7 @@ func handleWarnings(s *discordgo.Session, i *discordgo.InteractionCreate, opts [
 func handleClearWarnings(s *discordgo.Session, i *discordgo.InteractionCreate, opts []*discordgo.ApplicationCommandInteractionDataOption) {
 	user := interactionUser(i)
 	if user == nil {
-		respondText(s, i, "Unable to identify user.")
+		respondError(s, i, "Error", "Unable to identify user.")
 		return
 	}
 
@@ -772,7 +773,7 @@ func handleClearWarnings(s *discordgo.Session, i *discordgo.InteractionCreate, o
 
 	targetUser := optionUser(opts, "user")
 	if targetUser == nil {
-		respondText(s, i, "You must specify a user.")
+		respondError(s, i, "Missing Input", "You must specify a user.")
 		return
 	}
 
@@ -832,7 +833,7 @@ func handleClearWarnings(s *discordgo.Session, i *discordgo.InteractionCreate, o
 func handlePurge(s *discordgo.Session, i *discordgo.InteractionCreate, opts []*discordgo.ApplicationCommandInteractionDataOption) {
 	user := interactionUser(i)
 	if user == nil {
-		respondText(s, i, "Unable to identify user.")
+		respondError(s, i, "Error", "Unable to identify user.")
 		return
 	}
 
@@ -853,7 +854,7 @@ func handlePurge(s *discordgo.Session, i *discordgo.InteractionCreate, opts []*d
 
 	amount := int(optionInt(opts, "amount", 0))
 	if amount < 2 || amount > 100 {
-		respondText(s, i, "Amount must be between 2 and 100.")
+		respondError(s, i, "Invalid Input", "Amount must be between 2 and 100.")
 		return
 	}
 
@@ -885,7 +886,7 @@ func handlePurge(s *discordgo.Session, i *discordgo.InteractionCreate, opts []*d
 	}
 
 	if len(toDelete) == 0 {
-		respondText(s, i, "No messages found matching the filters.")
+		respondError(s, i, "No Messages", "No messages found matching the filters.")
 		return
 	}
 
@@ -930,7 +931,7 @@ func handlePurge(s *discordgo.Session, i *discordgo.InteractionCreate, opts []*d
 func handleLock(s *discordgo.Session, i *discordgo.InteractionCreate, opts []*discordgo.ApplicationCommandInteractionDataOption) {
 	user := interactionUser(i)
 	if user == nil {
-		respondText(s, i, "Unable to identify user.")
+		respondError(s, i, "Error", "Unable to identify user.")
 		return
 	}
 
@@ -975,6 +976,7 @@ func handleLock(s *discordgo.Session, i *discordgo.InteractionCreate, opts []*di
 		Description: fmt.Sprintf("**Reason:** %s\n**Moderator:** <@%s>", reason, user.ID),
 		Color:       ColorRed,
 		Timestamp:   time.Now().Format(time.RFC3339),
+		Footer:      embedFooter("🛡️ Moderation"),
 	}
 	_, _ = s.ChannelMessageSendEmbed(channelID, lockEmbed)
 
@@ -1004,7 +1006,7 @@ func handleLock(s *discordgo.Session, i *discordgo.InteractionCreate, opts []*di
 func handleUnlock(s *discordgo.Session, i *discordgo.InteractionCreate, opts []*discordgo.ApplicationCommandInteractionDataOption) {
 	user := interactionUser(i)
 	if user == nil {
-		respondText(s, i, "Unable to identify user.")
+		respondError(s, i, "Error", "Unable to identify user.")
 		return
 	}
 
@@ -1050,6 +1052,7 @@ func handleUnlock(s *discordgo.Session, i *discordgo.InteractionCreate, opts []*
 		Description: fmt.Sprintf("**Moderator:** <@%s>", user.ID),
 		Color:       ColorGreen,
 		Timestamp:   time.Now().Format(time.RFC3339),
+		Footer:      embedFooter("🛡️ Moderation"),
 	}
 	_, _ = s.ChannelMessageSendEmbed(channelID, unlockEmbed)
 
@@ -1079,7 +1082,7 @@ func handleUnlock(s *discordgo.Session, i *discordgo.InteractionCreate, opts []*
 func handleSlowmode(s *discordgo.Session, i *discordgo.InteractionCreate, opts []*discordgo.ApplicationCommandInteractionDataOption) {
 	user := interactionUser(i)
 	if user == nil {
-		respondText(s, i, "Unable to identify user.")
+		respondError(s, i, "Error", "Unable to identify user.")
 		return
 	}
 
@@ -1098,7 +1101,7 @@ func handleSlowmode(s *discordgo.Session, i *discordgo.InteractionCreate, opts [
 
 	seconds := int(optionInt(opts, "seconds", 0))
 	if seconds < 0 || seconds > 21600 {
-		respondText(s, i, "Slowmode delay must be between 0 and 21600 seconds (6 hours).")
+		respondError(s, i, "Invalid Input", "Slowmode delay must be between 0 and 21600 seconds (6 hours).")
 		return
 	}
 
@@ -1150,7 +1153,7 @@ func handleSlowmode(s *discordgo.Session, i *discordgo.InteractionCreate, opts [
 func handleModlog(s *discordgo.Session, i *discordgo.InteractionCreate, opts []*discordgo.ApplicationCommandInteractionDataOption) {
 	user := interactionUser(i)
 	if user == nil {
-		respondText(s, i, "Unable to identify user.")
+		respondError(s, i, "Error", "Unable to identify user.")
 		return
 	}
 
@@ -1169,14 +1172,14 @@ func handleModlog(s *discordgo.Session, i *discordgo.InteractionCreate, opts []*
 	case "view":
 		handleModlogView(s, i, subOpts)
 	default:
-		respondText(s, i, "Invalid subcommand.")
+		respondError(s, i, "Error", "Invalid subcommand.")
 	}
 }
 
 func handleModlogSetup(s *discordgo.Session, i *discordgo.InteractionCreate, opts []*discordgo.ApplicationCommandInteractionDataOption) {
 	channel := optionChannel(opts, "channel")
 	if channel == nil {
-		respondText(s, i, "You must specify a channel.")
+		respondError(s, i, "Missing Input", "You must specify a channel.")
 		return
 	}
 
@@ -1290,7 +1293,7 @@ func handleModlogView(s *discordgo.Session, i *discordgo.InteractionCreate, opts
 		Title:       title,
 		Description: description,
 		Color:       ColorBlue,
-		Footer:      &discordgo.MessageEmbedFooter{Text: fmt.Sprintf("Showing last %d of %d actions", len(guildActions)-start, totalCount)},
+		Footer:      &discordgo.MessageEmbedFooter{Text: fmt.Sprintf("Showing last %d of %d actions • %s", len(guildActions)-start, totalCount, botVersion)},
 		Timestamp:   time.Now().Format(time.RFC3339),
 	}
 	if targetUser != nil {
@@ -1307,7 +1310,7 @@ func handleModlogView(s *discordgo.Session, i *discordgo.InteractionCreate, opts
 func handleAutomod(s *discordgo.Session, i *discordgo.InteractionCreate, opts []*discordgo.ApplicationCommandInteractionDataOption) {
 	user := interactionUser(i)
 	if user == nil {
-		respondText(s, i, "Unable to identify user.")
+		respondError(s, i, "Error", "Unable to identify user.")
 		return
 	}
 
@@ -1326,7 +1329,7 @@ func handleAutomod(s *discordgo.Session, i *discordgo.InteractionCreate, opts []
 	case "toggle":
 		handleAutomodToggle(s, i, subOpts)
 	default:
-		respondText(s, i, "Invalid subcommand.")
+		respondError(s, i, "Error", "Invalid subcommand.")
 	}
 }
 
@@ -1380,7 +1383,7 @@ func handleAutomodSetup(s *discordgo.Session, i *discordgo.InteractionCreate) {
 			{Name: "Emoji Spam", Value: formatEnabled(config.AutoMod.EmojiSpamEnabled), Inline: true},
 			{Name: "External Links", Value: formatEnabled(config.AutoMod.LinksEnabled), Inline: true},
 		},
-		Footer:    &discordgo.MessageEmbedFooter{Text: "Use /automod toggle to enable/disable specific rules"},
+		Footer:    &discordgo.MessageEmbedFooter{Text: fmt.Sprintf("Use /automod toggle to enable/disable specific rules • %s", botVersion)},
 		Timestamp: time.Now().Format(time.RFC3339),
 	}
 
@@ -1392,7 +1395,7 @@ func handleAutomodToggle(s *discordgo.Session, i *discordgo.InteractionCreate, o
 	enabled := optionBool(opts, "enabled", false)
 
 	if rule == "" {
-		respondText(s, i, "You must specify a rule to toggle.")
+		respondError(s, i, "Missing Input", "You must specify a rule to toggle.")
 		return
 	}
 
@@ -1417,7 +1420,7 @@ func handleAutomodToggle(s *discordgo.Session, i *discordgo.InteractionCreate, o
 	case "links":
 		config.AutoMod.LinksEnabled = enabled
 	default:
-		respondText(s, i, "Invalid rule specified.")
+		respondError(s, i, "Invalid Input", "Invalid rule specified.")
 		return
 	}
 
@@ -1604,6 +1607,7 @@ func sendAutomodWarning(s *discordgo.Session, m *discordgo.MessageCreate, reason
 		Description: fmt.Sprintf("Your message was removed in the server.\n**Reason:** %s", reason),
 		Color:       ColorYellow,
 		Timestamp:   time.Now().Format(time.RFC3339),
+		Footer:      embedFooter("🛡️ Moderation"),
 	}
 
 	_, _ = s.ChannelMessageSendEmbed(ch.ID, embed)
@@ -1725,7 +1729,7 @@ func handleModCmd(s *discordgo.Session, i *discordgo.InteractionCreate) {
 func handleSoftban(s *discordgo.Session, i *discordgo.InteractionCreate, opts []*discordgo.ApplicationCommandInteractionDataOption) {
 	user := interactionUser(i)
 	if user == nil {
-		respondText(s, i, "Unable to identify user.")
+		respondError(s, i, "Error", "Unable to identify user.")
 		return
 	}
 
@@ -1744,12 +1748,12 @@ func handleSoftban(s *discordgo.Session, i *discordgo.InteractionCreate, opts []
 
 	targetUser := optionUser(opts, "user")
 	if targetUser == nil {
-		respondText(s, i, "You must specify a user to softban.")
+		respondError(s, i, "Missing Input", "You must specify a user to softban.")
 		return
 	}
 
 	if targetUser.Bot {
-		respondText(s, i, "You cannot softban bots.")
+		respondError(s, i, "Invalid Target", "You cannot softban bots.")
 		return
 	}
 
@@ -1760,7 +1764,7 @@ func handleSoftban(s *discordgo.Session, i *discordgo.InteractionCreate, opts []
 
 	moderator, err := s.GuildMember(i.GuildID, user.ID)
 	if err != nil {
-		respondText(s, i, "Failed to fetch moderator information.")
+		respondError(s, i, "Error", "Failed to fetch moderator information.")
 		return
 	}
 
@@ -1823,7 +1827,7 @@ func handleSoftban(s *discordgo.Session, i *discordgo.InteractionCreate, opts []
 func handleHistory(s *discordgo.Session, i *discordgo.InteractionCreate, opts []*discordgo.ApplicationCommandInteractionDataOption) {
 	user := interactionUser(i)
 	if user == nil {
-		respondText(s, i, "Unable to identify user.")
+		respondError(s, i, "Error", "Unable to identify user.")
 		return
 	}
 
@@ -1835,7 +1839,7 @@ func handleHistory(s *discordgo.Session, i *discordgo.InteractionCreate, opts []
 
 	targetUser := optionUser(opts, "user")
 	if targetUser == nil {
-		respondText(s, i, "You must specify a user.")
+		respondError(s, i, "Missing Input", "You must specify a user.")
 		return
 	}
 
@@ -1869,7 +1873,7 @@ func handleHistory(s *discordgo.Session, i *discordgo.InteractionCreate, opts []
 
 	embed := createModEmbed(fmt.Sprintf("📋 History - %s", targetUser.Username), description)
 	embed.Thumbnail = &discordgo.MessageEmbedThumbnail{URL: userAvatar(targetUser)}
-	embed.Footer = &discordgo.MessageEmbedFooter{Text: fmt.Sprintf("Showing last %d of %d actions | 🛡️ Discorbo Moderation", len(filtered)-start, len(filtered))}
+	embed.Footer = &discordgo.MessageEmbedFooter{Text: fmt.Sprintf("Showing last %d of %d actions • 🛡️ Moderation • %s", len(filtered)-start, len(filtered), botVersion)}
 	respondEmbed(s, i, embed)
 }
 
@@ -1880,7 +1884,7 @@ func handleHistory(s *discordgo.Session, i *discordgo.InteractionCreate, opts []
 func handleCase(s *discordgo.Session, i *discordgo.InteractionCreate, opts []*discordgo.ApplicationCommandInteractionDataOption) {
 	user := interactionUser(i)
 	if user == nil {
-		respondText(s, i, "Unable to identify user.")
+		respondError(s, i, "Error", "Unable to identify user.")
 		return
 	}
 
@@ -1892,7 +1896,7 @@ func handleCase(s *discordgo.Session, i *discordgo.InteractionCreate, opts []*di
 
 	caseID := optionString(opts, "id", "")
 	if caseID == "" {
-		respondText(s, i, "You must specify a case ID.")
+		respondError(s, i, "Missing Input", "You must specify a case ID.")
 		return
 	}
 
@@ -1935,7 +1939,7 @@ func handleCase(s *discordgo.Session, i *discordgo.InteractionCreate, opts []*di
 func handleReason(s *discordgo.Session, i *discordgo.InteractionCreate, opts []*discordgo.ApplicationCommandInteractionDataOption) {
 	user := interactionUser(i)
 	if user == nil {
-		respondText(s, i, "Unable to identify user.")
+		respondError(s, i, "Error", "Unable to identify user.")
 		return
 	}
 
@@ -1948,7 +1952,7 @@ func handleReason(s *discordgo.Session, i *discordgo.InteractionCreate, opts []*
 	caseID := optionString(opts, "case_id", "")
 	newReason := optionString(opts, "reason", "")
 	if caseID == "" || newReason == "" {
-		respondText(s, i, "You must specify a case ID and a new reason.")
+		respondError(s, i, "Missing Input", "You must specify a case ID and a new reason.")
 		return
 	}
 
@@ -1983,13 +1987,13 @@ func handleReason(s *discordgo.Session, i *discordgo.InteractionCreate, opts []*
 func handleReport(s *discordgo.Session, i *discordgo.InteractionCreate, opts []*discordgo.ApplicationCommandInteractionDataOption) {
 	user := interactionUser(i)
 	if user == nil {
-		respondText(s, i, "Unable to identify user.")
+		respondError(s, i, "Error", "Unable to identify user.")
 		return
 	}
 
 	targetUser := optionUser(opts, "user")
 	if targetUser == nil {
-		respondText(s, i, "You must specify a user to report.")
+		respondError(s, i, "Missing Input", "You must specify a user to report.")
 		return
 	}
 
@@ -2007,7 +2011,7 @@ func handleReport(s *discordgo.Session, i *discordgo.InteractionCreate, opts []*
 
 	reason := optionString(opts, "reason", "")
 	if reason == "" {
-		respondText(s, i, "You must provide a reason for the report.")
+		respondError(s, i, "Missing Input", "You must provide a reason for the report.")
 		return
 	}
 
@@ -2038,7 +2042,7 @@ func handleReport(s *discordgo.Session, i *discordgo.InteractionCreate, opts []*
 func handleReports(s *discordgo.Session, i *discordgo.InteractionCreate, opts []*discordgo.ApplicationCommandInteractionDataOption) {
 	user := interactionUser(i)
 	if user == nil {
-		respondText(s, i, "Unable to identify user.")
+		respondError(s, i, "Error", "Unable to identify user.")
 		return
 	}
 
@@ -2087,7 +2091,7 @@ func handleReports(s *discordgo.Session, i *discordgo.InteractionCreate, opts []
 	}
 
 	embed := createModEmbed(title, description)
-	embed.Footer = &discordgo.MessageEmbedFooter{Text: fmt.Sprintf("Showing last %d of %d reports | 🛡️ Discorbo Moderation", len(filtered)-start, len(filtered))}
+	embed.Footer = &discordgo.MessageEmbedFooter{Text: fmt.Sprintf("Showing last %d of %d reports • 🛡️ Moderation • %s", len(filtered)-start, len(filtered), botVersion)}
 	respondEmbed(s, i, embed)
 }
 
@@ -2098,7 +2102,7 @@ func handleReports(s *discordgo.Session, i *discordgo.InteractionCreate, opts []
 func handleMassban(s *discordgo.Session, i *discordgo.InteractionCreate, opts []*discordgo.ApplicationCommandInteractionDataOption) {
 	user := interactionUser(i)
 	if user == nil {
-		respondText(s, i, "Unable to identify user.")
+		respondError(s, i, "Error", "Unable to identify user.")
 		return
 	}
 
@@ -2131,7 +2135,7 @@ func handleMassban(s *discordgo.Session, i *discordgo.InteractionCreate, opts []
 
 	moderator, err := s.GuildMember(i.GuildID, user.ID)
 	if err != nil {
-		respondText(s, i, "Failed to fetch moderator information.")
+		respondError(s, i, "Error", "Failed to fetch moderator information.")
 		return
 	}
 
@@ -2194,7 +2198,7 @@ func handleMassban(s *discordgo.Session, i *discordgo.InteractionCreate, opts []
 func handleModnote(s *discordgo.Session, i *discordgo.InteractionCreate, opts []*discordgo.ApplicationCommandInteractionDataOption) {
 	user := interactionUser(i)
 	if user == nil {
-		respondText(s, i, "Unable to identify user.")
+		respondError(s, i, "Error", "Unable to identify user.")
 		return
 	}
 
@@ -2206,13 +2210,13 @@ func handleModnote(s *discordgo.Session, i *discordgo.InteractionCreate, opts []
 
 	targetUser := optionUser(opts, "user")
 	if targetUser == nil {
-		respondText(s, i, "You must specify a user.")
+		respondError(s, i, "Missing Input", "You must specify a user.")
 		return
 	}
 
 	note := optionString(opts, "note", "")
 	if note == "" {
-		respondText(s, i, "You must provide a note.")
+		respondError(s, i, "Missing Input", "You must provide a note.")
 		return
 	}
 

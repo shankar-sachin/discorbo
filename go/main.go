@@ -138,7 +138,7 @@ func main() {
 	// Migrate v1 data if needed
 	migrateV1Data()
 
-	log.Println("Discorbo v2.1 — Go runtime active (all commands)")
+	log.Println("Discorbo v2.2 — Go runtime active (all commands)")
 	stop := make(chan os.Signal, 1)
 	signal.Notify(stop, syscall.SIGINT, syscall.SIGTERM)
 	<-stop

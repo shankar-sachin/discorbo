@@ -39,7 +39,8 @@ func handleUtilCmd(s *discordgo.Session, i *discordgo.InteractionCreate) {
 
 	switch sub.Name {
 	case "ping":
-		respondText(s, i, fmt.Sprintf("Pong! Gateway ping: %dms", s.HeartbeatLatency().Milliseconds()))
+		embed := createUtilityEmbed("🏓 Pong!", fmt.Sprintf("**Gateway Latency:** `%dms`", s.HeartbeatLatency().Milliseconds()))
+		respondEmbed(s, i, embed)
 	case "help":
 		handleHelp(s, i, subOpts)
 	case "avatar":
@@ -180,53 +181,55 @@ func handleHelp(s *discordgo.Session, i *discordgo.InteractionCreate, opts []*di
 func handleAvatar(s *discordgo.Session, i *discordgo.InteractionCreate, opts []*discordgo.ApplicationCommandInteractionDataOption) {
 	u := interactionUser(i)
 	if u == nil {
-		respondText(s, i, "Unable to identify user.")
+		respondError(s, i, "Error", "Unable to identify user.")
 		return
 	}
 	if picked := optionUser(opts, "user"); picked != nil {
 		u = picked
 	}
 	url := u.AvatarURL("1024")
-	embed := &discordgo.MessageEmbed{
-		Title:       fmt.Sprintf("%s's Avatar", u.Username),
-		Description: fmt.Sprintf("[Open image](%s)", url),
-		Color:       0x5865F2,
-	}
-	if url != "" {
-		embed.Image = &discordgo.MessageEmbedImage{URL: url}
-	}
+	embed := richEmbed(richEmbedOpts{
+		Title:       fmt.Sprintf("🖼️ %s's Avatar", u.Username),
+		Description: fmt.Sprintf("[Open full image](%s)", url),
+		Color:       ColorBlue,
+		Category:    "🛠️ Utility",
+		ImageURL:    url,
+		AuthorName:  u.Username,
+		AuthorIcon:  u.AvatarURL("64"),
+	})
 	respondEmbed(s, i, embed)
 }
 
 func handleUserInfo(s *discordgo.Session, i *discordgo.InteractionCreate, opts []*discordgo.ApplicationCommandInteractionDataOption) {
 	u := interactionUser(i)
 	if u == nil {
-		respondText(s, i, "Unable to identify user.")
+		respondError(s, i, "Error", "Unable to identify user.")
 		return
 	}
 	if picked := optionUser(opts, "user"); picked != nil {
 		u = picked
 	}
-	embed := &discordgo.MessageEmbed{
-		Title: fmt.Sprintf("User Information: %s", u.String()),
-		Color: 0x5865F2,
+	embed := richEmbed(richEmbedOpts{
+		Title:        "👤 User Information",
+		Color:        ColorBlue,
+		Category:     "🛠️ Utility",
+		AuthorName:   u.String(),
+		AuthorIcon:   u.AvatarURL("64"),
+		ThumbnailURL: u.AvatarURL("1024"),
 		Fields: []*discordgo.MessageEmbedField{
-			{Name: "Username", Value: u.Username, Inline: true},
-			{Name: "User ID", Value: u.ID, Inline: true},
-			{Name: "Bot Account", Value: strconv.FormatBool(u.Bot), Inline: true},
-			{Name: "Created", Value: fmt.Sprintf("<t:%d:R>", snowflakeUnix(u.ID)), Inline: true},
+			miniField("👤 Username", u.Username),
+			miniField("🆔 User ID", "`"+u.ID+"`"),
+			miniField("🤖 Bot Account", strconv.FormatBool(u.Bot)),
+			miniField("📅 Created", fmt.Sprintf("<t:%d:R>", snowflakeUnix(u.ID))),
 		},
-	}
-	if avatar := u.AvatarURL("1024"); avatar != "" {
-		embed.Thumbnail = &discordgo.MessageEmbedThumbnail{URL: avatar}
-	}
+	})
 	if i.GuildID != "" {
 		if m, err := s.GuildMember(i.GuildID, u.ID); err == nil && m != nil {
 			if !m.JoinedAt.IsZero() {
-				embed.Fields = append(embed.Fields, &discordgo.MessageEmbedField{Name: "Joined Server", Value: fmt.Sprintf("<t:%d:R>", m.JoinedAt.Unix()), Inline: true})
+				embed.Fields = append(embed.Fields, miniField("📥 Joined Server", fmt.Sprintf("<t:%d:R>", m.JoinedAt.Unix())))
 			}
 			if m.Nick != "" {
-				embed.Fields = append(embed.Fields, &discordgo.MessageEmbedField{Name: "Nickname", Value: m.Nick, Inline: true})
+				embed.Fields = append(embed.Fields, miniField("📛 Nickname", m.Nick))
 			}
 		}
 	}
@@ -235,12 +238,12 @@ func handleUserInfo(s *discordgo.Session, i *discordgo.InteractionCreate, opts [
 
 func handleServerInfo(s *discordgo.Session, i *discordgo.InteractionCreate) {
 	if i.GuildID == "" {
-		respondText(s, i, "This command only works in a server.")
+		respondError(s, i, "Error", "This command only works in a server.")
 		return
 	}
 	g, err := s.Guild(i.GuildID)
 	if err != nil || g == nil {
-		respondText(s, i, "Failed to fetch server info.")
+		respondError(s, i, "Error", "Failed to fetch server info.")
 		return
 	}
 	channels, _ := s.GuildChannels(i.GuildID)
@@ -259,18 +262,19 @@ func handleServerInfo(s *discordgo.Session, i *discordgo.InteractionCreate) {
 	if g.OwnerID != "" {
 		owner = "<@" + g.OwnerID + ">"
 	}
-	embed := &discordgo.MessageEmbed{
-		Title: g.Name,
-		Color: 0x5865F2,
+	embed := richEmbed(richEmbedOpts{
+		Title:    "🏠 " + g.Name,
+		Color:    ColorBlue,
+		Category: "🛠️ Utility",
 		Fields: []*discordgo.MessageEmbedField{
-			{Name: "Server ID", Value: g.ID, Inline: true},
-			{Name: "Owner", Value: owner, Inline: true},
-			{Name: "Created", Value: fmt.Sprintf("<t:%d:R>", snowflakeUnix(g.ID)), Inline: true},
-			{Name: "Members", Value: strconv.Itoa(g.MemberCount), Inline: true},
-			{Name: "Channels", Value: fmt.Sprintf("Text: %d\nVoice: %d\nCategories: %d", textChannels, voiceChannels, categories), Inline: true},
-			{Name: "Roles", Value: strconv.Itoa(len(g.Roles)), Inline: true},
+			miniField("🆔 Server ID", "`"+g.ID+"`"),
+			miniField("👑 Owner", owner),
+			miniField("📅 Created", fmt.Sprintf("<t:%d:R>", snowflakeUnix(g.ID))),
+			miniField("👥 Members", fmt.Sprintf("**%s**", strconv.Itoa(g.MemberCount))),
+			miniField("💬 Channels", fmt.Sprintf("Text: **%d**\nVoice: **%d**\nCategories: **%d**", textChannels, voiceChannels, categories)),
+			miniField("🎭 Roles", fmt.Sprintf("**%d**", len(g.Roles))),
 		},
-	}
+	})
 	if icon := g.IconURL("1024"); icon != "" {
 		embed.Thumbnail = &discordgo.MessageEmbedThumbnail{URL: icon}
 	}
@@ -288,7 +292,7 @@ func handleChannelInfo(s *discordgo.Session, i *discordgo.InteractionCreate, opt
 	}
 	ch, err := s.Channel(channelID)
 	if err != nil || ch == nil {
-		respondText(s, i, "Failed to fetch channel.")
+		respondError(s, i, "Error", "Failed to fetch channel.")
 		return
 	}
 	topic := ch.Topic
@@ -298,22 +302,40 @@ func handleChannelInfo(s *discordgo.Session, i *discordgo.InteractionCreate, opt
 	if len(topic) > 1024 {
 		topic = topic[:1021] + "..."
 	}
-	embed := &discordgo.MessageEmbed{
-		Title: fmt.Sprintf("Channel Information: #%s", ch.Name),
-		Color: 0x5865F2,
-		Fields: []*discordgo.MessageEmbedField{
-			{Name: "Channel ID", Value: ch.ID, Inline: true},
-			{Name: "Type", Value: fmt.Sprintf("%d", ch.Type), Inline: true},
-			{Name: "Created", Value: fmt.Sprintf("<t:%d:R>", snowflakeUnix(ch.ID)), Inline: true},
-			{Name: "Topic", Value: topic, Inline: false},
-		},
+	typeName := "Unknown"
+	switch ch.Type {
+	case discordgo.ChannelTypeGuildText:
+		typeName = "📝 Text"
+	case discordgo.ChannelTypeGuildVoice:
+		typeName = "🔊 Voice"
+	case discordgo.ChannelTypeGuildCategory:
+		typeName = "📁 Category"
+	case discordgo.ChannelTypeGuildNews:
+		typeName = "📰 News"
+	case discordgo.ChannelTypeGuildStageVoice:
+		typeName = "🎭 Stage"
+	case discordgo.ChannelTypeGuildForum:
+		typeName = "💬 Forum"
+	default:
+		typeName = fmt.Sprintf("Type %d", ch.Type)
 	}
+	embed := richEmbed(richEmbedOpts{
+		Title:    fmt.Sprintf("📝 Channel Information: #%s", ch.Name),
+		Color:    ColorBlue,
+		Category: "🛠️ Utility",
+		Fields: []*discordgo.MessageEmbedField{
+			miniField("🆔 Channel ID", "`"+ch.ID+"`"),
+			miniField("📂 Type", typeName),
+			miniField("📅 Created", fmt.Sprintf("<t:%d:R>", snowflakeUnix(ch.ID))),
+			wideField("📝 Topic", topic),
+		},
+	})
 	respondEmbed(s, i, embed)
 }
 
 func handleRoleInfo(s *discordgo.Session, i *discordgo.InteractionCreate, opts []*discordgo.ApplicationCommandInteractionDataOption) {
 	if i.GuildID == "" {
-		respondText(s, i, "This command only works in a server.")
+		respondError(s, i, "Error", "This command only works in a server.")
 		return
 	}
 	roleID := ""
@@ -325,12 +347,12 @@ func handleRoleInfo(s *discordgo.Session, i *discordgo.InteractionCreate, opts [
 		}
 	}
 	if roleID == "" {
-		respondText(s, i, "Role is required.")
+		respondError(s, i, "Error", "Role is required.")
 		return
 	}
 	roles, err := s.GuildRoles(i.GuildID)
 	if err != nil {
-		respondText(s, i, "Failed to fetch roles.")
+		respondError(s, i, "Error", "Failed to fetch roles.")
 		return
 	}
 	var role *discordgo.Role
@@ -341,25 +363,26 @@ func handleRoleInfo(s *discordgo.Session, i *discordgo.InteractionCreate, opts [
 		}
 	}
 	if role == nil {
-		respondText(s, i, "Role not found.")
+		respondError(s, i, "Error", "Role not found.")
 		return
 	}
-	color := 0x5865F2
+	color := ColorBlue
 	if role.Color != 0 {
 		color = role.Color
 	}
-	embed := &discordgo.MessageEmbed{
-		Title: fmt.Sprintf("Role Information: %s", role.Name),
-		Color: color,
+	embed := richEmbed(richEmbedOpts{
+		Title:    fmt.Sprintf("🎭 Role Information: %s", role.Name),
+		Color:    color,
+		Category: "🛠️ Utility",
 		Fields: []*discordgo.MessageEmbedField{
-			{Name: "Role ID", Value: role.ID, Inline: true},
-			{Name: "Color", Value: fmt.Sprintf("#%06X", role.Color), Inline: true},
-			{Name: "Mentionable", Value: strconv.FormatBool(role.Mentionable), Inline: true},
-			{Name: "Hoisted", Value: strconv.FormatBool(role.Hoist), Inline: true},
-			{Name: "Created", Value: fmt.Sprintf("<t:%d:R>", snowflakeUnix(role.ID)), Inline: true},
-			{Name: "Mention", Value: "<@&" + role.ID + ">", Inline: true},
+			miniField("🆔 Role ID", "`"+role.ID+"`"),
+			miniField("🎨 Color", fmt.Sprintf("#%06X", role.Color)),
+			miniField("📢 Mentionable", strconv.FormatBool(role.Mentionable)),
+			miniField("📌 Hoisted", strconv.FormatBool(role.Hoist)),
+			miniField("📅 Created", fmt.Sprintf("<t:%d:R>", snowflakeUnix(role.ID))),
+			miniField("💬 Mention", "<@&"+role.ID+">"),
 		},
-	}
+	})
 	respondEmbed(s, i, embed)
 }
 
@@ -372,18 +395,19 @@ func handleStats(s *discordgo.Session, i *discordgo.InteractionCreate) {
 	for _, g := range s.State.Guilds {
 		users += g.MemberCount
 	}
-	embed := &discordgo.MessageEmbed{
-		Title: "Bot Statistics",
-		Color: 0x5865F2,
+	embed := richEmbed(richEmbedOpts{
+		Title:    "📊 Bot Statistics",
+		Color:    ColorBlue,
+		Category: "📊 Statistics",
 		Fields: []*discordgo.MessageEmbedField{
-			{Name: "Servers", Value: strconv.Itoa(guilds), Inline: true},
-			{Name: "Users", Value: strconv.Itoa(users), Inline: true},
-			{Name: "Commands", Value: strconv.Itoa(len(allCommands())), Inline: true},
-			{Name: "Uptime", Value: uptime.String(), Inline: true},
-			{Name: "Memory", Value: fmt.Sprintf("%.2f MB", float64(heap.HeapAlloc)/(1024*1024)), Inline: true},
-			{Name: "Go", Value: runtime.Version(), Inline: true},
+			miniField("🏠 Servers", strconv.Itoa(guilds)),
+			miniField("👥 Users", strconv.Itoa(users)),
+			miniField("🤖 Commands", strconv.Itoa(len(allCommands()))),
+			miniField("⏱️ Uptime", uptime.String()),
+			miniField("💾 Memory", fmt.Sprintf("%.2f MB", float64(heap.HeapAlloc)/(1024*1024))),
+			miniField("🔧 Go", runtime.Version()),
 		},
-	}
+	})
 	respondEmbed(s, i, embed)
 }
 
@@ -391,7 +415,7 @@ func handleCalc(s *discordgo.Session, i *discordgo.InteractionCreate, opts []*di
 	expr := optionString(opts, "expression", "")
 	result, err := evalMath(expr)
 	if err != nil {
-		respondText(s, i, fmt.Sprintf("Invalid expression: %v\n\nSupported:\n• Basic: +, -, *, /, ^, %%\n• Functions: sqrt, sin, cos, tan, log, ln, abs, etc.\n• Constants: pi, e, tau, phi\n• Scientific: 1e6, 2.5e-3", err))
+		respondError(s, i, "Invalid Expression", fmt.Sprintf("%v\n\nSupported:\n• Basic: +, -, *, /, ^, %%\n• Functions: sqrt, sin, cos, tan, log, ln, abs, etc.\n• Constants: pi, e, tau, phi\n• Scientific: 1e6, 2.5e-3", err))
 		return
 	}
 	embed := createSuccessEmbed("Calculator", fmt.Sprintf("**Expression:** `%s`\n**Result:** `%s`", expr, result))
@@ -497,7 +521,7 @@ func handlePoll(s *discordgo.Session, i *discordgo.InteractionCreate, opts []*di
 			Color:     ColorBlue,
 			Fields:    fields,
 			Timestamp: time.Now().Format(time.RFC3339),
-			Footer:    &discordgo.MessageEmbedFooter{Text: fmt.Sprintf("Poll by %s • %d total votes | Discorbo", creator, totalVotes)},
+			Footer:    &discordgo.MessageEmbedFooter{Text: fmt.Sprintf("Poll by %s  •  %d total votes  •  %s", creator, totalVotes, botVersion)},
 		}
 		return embed
 	}
@@ -589,7 +613,7 @@ func buildPollEmbedFromSession(sess *pollSession, creator string) *discordgo.Mes
 		Color:     ColorBlue,
 		Fields:    fields,
 		Timestamp: time.Now().Format(time.RFC3339),
-		Footer:    &discordgo.MessageEmbedFooter{Text: fmt.Sprintf("Poll by %s • %d total votes | Discorbo", creator, totalVotes)},
+		Footer:    &discordgo.MessageEmbedFooter{Text: fmt.Sprintf("Poll by %s  •  %d total votes  •  %s", creator, totalVotes, botVersion)},
 	}
 }
 
@@ -675,7 +699,7 @@ func handleRemind(s *discordgo.Session, i *discordgo.InteractionCreate, opts []*
 func handleReminders(s *discordgo.Session, i *discordgo.InteractionCreate, opts []*discordgo.ApplicationCommandInteractionDataOption) {
 	user := interactionUser(i)
 	if user == nil {
-		respondText(s, i, "Unable to identify user.")
+		respondError(s, i, "Error", "Unable to identify user.")
 		return
 	}
 	sub, subOpts := getSubcommand(opts)
@@ -707,7 +731,7 @@ func handleReminders(s *discordgo.Session, i *discordgo.InteractionCreate, opts 
 		}
 		embed := createInfoEmbed("⏰ Your Reminders", "")
 		embed.Fields = fields
-		embed.Footer = &discordgo.MessageEmbedFooter{Text: fmt.Sprintf("%d active reminders | Discorbo", len(userReminders))}
+		embed.Footer = &discordgo.MessageEmbedFooter{Text: fmt.Sprintf("%d active reminders  •  Discorbo", len(userReminders))}
 		respondEmbed(s, i, embed)
 	case "clear":
 		kept := make([]reminderEntry, 0, len(reminders))
@@ -757,7 +781,7 @@ func handleAFK(s *discordgo.Session, i *discordgo.InteractionCreate, opts []*dis
 	embed.Fields = []*discordgo.MessageEmbedField{
 		{Name: "Since", Value: fmt.Sprintf("<t:%d:T>", time.Now().Unix()), Inline: true},
 	}
-	embed.Footer = &discordgo.MessageEmbedFooter{Text: "Send a message to return from AFK | Discorbo"}
+	embed.Footer = &discordgo.MessageEmbedFooter{Text: "Send a message to return from AFK  •  Discorbo"}
 	respondEmbed(s, i, embed)
 }
 
@@ -767,13 +791,13 @@ func handleConvert(s *discordgo.Session, i *discordgo.InteractionCreate, opts []
 	toUnit := strings.ToLower(strings.TrimSpace(optionString(opts, "to", "")))
 
 	if fromUnit == "" || toUnit == "" {
-		respondText(s, i, "Both from and to units are required.")
+		respondError(s, i, "Error", "Both from and to units are required.")
 		return
 	}
 
 	result, err := convertUnits(value, fromUnit, toUnit)
 	if err != nil {
-		respondText(s, i, fmt.Sprintf("Conversion error: %v", err))
+		respondError(s, i, "Conversion Error", fmt.Sprintf("%v", err))
 		return
 	}
 
@@ -846,7 +870,7 @@ func convertTemperature(value float64, from, to string) string {
 func handleClearMyData(s *discordgo.Session, i *discordgo.InteractionCreate, opts []*discordgo.ApplicationCommandInteractionDataOption) {
 	user := interactionUser(i)
 	if user == nil {
-		respondText(s, i, "Unable to identify user.")
+		respondError(s, i, "Error", "Unable to identify user.")
 		return
 	}
 	if !optionBool(opts, "confirm", false) {
@@ -896,7 +920,7 @@ func handleClearMyData(s *discordgo.Session, i *discordgo.InteractionCreate, opt
 func handleNick(s *discordgo.Session, i *discordgo.InteractionCreate, opts []*discordgo.ApplicationCommandInteractionDataOption) {
 	user := interactionUser(i)
 	if user == nil {
-		respondText(s, i, "Unable to identify user.")
+		respondError(s, i, "Error", "Unable to identify user.")
 		return
 	}
 
@@ -908,7 +932,7 @@ func handleNick(s *discordgo.Session, i *discordgo.InteractionCreate, opts []*di
 
 	target := optionUser(opts, "user")
 	if target == nil {
-		respondText(s, i, "You must specify a user.")
+		respondError(s, i, "Error", "You must specify a user.")
 		return
 	}
 
@@ -936,7 +960,7 @@ func handleNick(s *discordgo.Session, i *discordgo.InteractionCreate, opts []*di
 func handleRole(s *discordgo.Session, i *discordgo.InteractionCreate, opts []*discordgo.ApplicationCommandInteractionDataOption) {
 	user := interactionUser(i)
 	if user == nil {
-		respondText(s, i, "Unable to identify user.")
+		respondError(s, i, "Error", "Unable to identify user.")
 		return
 	}
 
@@ -952,13 +976,13 @@ func handleRole(s *discordgo.Session, i *discordgo.InteractionCreate, opts []*di
 
 		target := optionUser(subOpts, "user")
 		if target == nil {
-			respondText(s, i, "You must specify a user.")
+			respondError(s, i, "Error", "You must specify a user.")
 			return
 		}
 
 		role := optionRole(subOpts, "role")
 		if role == nil {
-			respondText(s, i, "You must specify a role.")
+			respondError(s, i, "Error", "You must specify a role.")
 			return
 		}
 
@@ -984,12 +1008,12 @@ func handleRole(s *discordgo.Session, i *discordgo.InteractionCreate, opts []*di
 	case "list":
 		guild, err := s.Guild(i.GuildID)
 		if err != nil {
-			respondText(s, i, "Failed to fetch guild information.")
+			respondError(s, i, "Error", "Failed to fetch guild information.")
 			return
 		}
 
 		if len(guild.Roles) == 0 {
-			respondText(s, i, "This server has no roles.")
+			respondError(s, i, "Error", "This server has no roles.")
 			return
 		}
 
@@ -1018,11 +1042,12 @@ func handleRole(s *discordgo.Session, i *discordgo.InteractionCreate, opts []*di
 			Description: roleList,
 			Color:       ColorBlue,
 			Timestamp:   time.Now().Format(time.RFC3339),
+			Footer:      embedFooter("🛠️ Utility"),
 		}
 		respondEmbed(s, i, embed)
 
 	default:
-		respondText(s, i, "Invalid subcommand. Use add, remove, or list.")
+		respondError(s, i, "Error", "Invalid subcommand. Use add, remove, or list.")
 	}
 }
 
@@ -1033,7 +1058,7 @@ func handleRole(s *discordgo.Session, i *discordgo.InteractionCreate, opts []*di
 func handleAnnounce(s *discordgo.Session, i *discordgo.InteractionCreate, opts []*discordgo.ApplicationCommandInteractionDataOption) {
 	user := interactionUser(i)
 	if user == nil {
-		respondText(s, i, "Unable to identify user.")
+		respondError(s, i, "Error", "Unable to identify user.")
 		return
 	}
 
@@ -1045,13 +1070,13 @@ func handleAnnounce(s *discordgo.Session, i *discordgo.InteractionCreate, opts [
 
 	channel := optionChannel(opts, "channel")
 	if channel == nil {
-		respondText(s, i, "You must specify a channel.")
+		respondError(s, i, "Error", "You must specify a channel.")
 		return
 	}
 
 	message := optionString(opts, "message", "")
 	if message == "" {
-		respondText(s, i, "You must provide a message.")
+		respondError(s, i, "Error", "You must provide a message.")
 		return
 	}
 
@@ -1068,7 +1093,7 @@ func handleAnnounce(s *discordgo.Session, i *discordgo.InteractionCreate, opts [
 		Title:       fmt.Sprintf("📢 %s", guildName),
 		Description: message,
 		Color:       ColorBlue,
-		Footer:      &discordgo.MessageEmbedFooter{Text: fmt.Sprintf("Announced by %s", user.Username)},
+		Footer:      &discordgo.MessageEmbedFooter{Text: fmt.Sprintf("Announced by %s  •  Discorbo", user.Username)},
 		Timestamp:   time.Now().Format(time.RFC3339),
 	}
 
@@ -1147,6 +1172,7 @@ func handleColor(s *discordgo.Session, i *discordgo.InteractionCreate, opts []*d
 		Description: desc,
 		Color:       int(val),
 		Timestamp:   time.Now().Format(time.RFC3339),
+		Footer:      embedFooter("🎨 Utility"),
 	}
 	respondEmbed(s, i, embed)
 }
@@ -1251,20 +1277,20 @@ func handleGitHub(s *discordgo.Session, i *discordgo.InteractionCreate, opts []*
 		desc = "*No description*"
 	}
 
-	embed := &discordgo.MessageEmbed{
-		Title:       fmt.Sprintf("📦 %s", gh.FullName),
-		URL:         gh.HTMLURL,
-		Description: desc,
-		Color:       ColorBlue,
-		Thumbnail:   &discordgo.MessageEmbedThumbnail{URL: gh.Owner.AvatarURL},
+	embed := richEmbed(richEmbedOpts{
+		Title:        fmt.Sprintf("📦 %s", gh.FullName),
+		Description:  desc,
+		Color:        ColorBlue,
+		Category:     "🛠️ Utility",
+		ThumbnailURL: gh.Owner.AvatarURL,
 		Fields: []*discordgo.MessageEmbedField{
-			{Name: "⭐ Stars", Value: fmt.Sprintf("%d", gh.Stars), Inline: true},
-			{Name: "🍴 Forks", Value: fmt.Sprintf("%d", gh.Forks), Inline: true},
-			{Name: "💻 Language", Value: lang, Inline: true},
-			{Name: "❗ Issues", Value: fmt.Sprintf("%d", gh.OpenIssues), Inline: true},
+			miniField("⭐ Stars", fmt.Sprintf("**%d**", gh.Stars)),
+			miniField("🍴 Forks", fmt.Sprintf("**%d**", gh.Forks)),
+			miniField("💻 Language", lang),
+			miniField("❗ Issues", fmt.Sprintf("**%d**", gh.OpenIssues)),
 		},
-		Timestamp: time.Now().Format(time.RFC3339),
-	}
+	})
+	embed.URL = gh.HTMLURL
 	editDeferredEmbed(s, i, embed, nil)
 }
 
@@ -1310,17 +1336,17 @@ func handleSnipe(s *discordgo.Session, i *discordgo.InteractionCreate) {
 		content = content[:1021] + "…"
 	}
 
-	embed := &discordgo.MessageEmbed{
+	embed := richEmbed(richEmbedOpts{
 		Title:       "🔫 Sniped Message",
 		Description: content,
 		Color:       ColorBlue,
-		Author: &discordgo.MessageEmbedAuthor{
-			Name:    msg.AuthorName,
-			IconURL: msg.AuthorAvatar,
+		Category:    "🛠️ Utility",
+		AuthorName:  msg.AuthorName,
+		AuthorIcon:  msg.AuthorAvatar,
+		Fields: []*discordgo.MessageEmbedField{
+			miniField("🕐 Deleted", msg.Time.Format("Jan 2, 3:04 PM")),
 		},
-		Footer:    &discordgo.MessageEmbedFooter{Text: fmt.Sprintf("Deleted %s", msg.Time.Format("Jan 2 15:04:05"))},
-		Timestamp: time.Now().Format(time.RFC3339),
-	}
+	})
 	respondEmbed(s, i, embed)
 }
 
@@ -1345,7 +1371,9 @@ func handleEmbedBuilder(s *discordgo.Session, i *discordgo.InteractionCreate, op
 		Color:       int(colorVal),
 		Timestamp:   time.Now().Format(time.RFC3339),
 	}
-	if footer != "" {
+	if footer == "" {
+		embed.Footer = embedFooter("🛠️ Utility")
+	} else {
 		embed.Footer = &discordgo.MessageEmbedFooter{Text: footer}
 	}
 	respondEmbed(s, i, embed)
@@ -1381,7 +1409,7 @@ func handleGiveaway(s *discordgo.Session, i *discordgo.InteractionCreate, opts [
 		Description: fmt.Sprintf("**Prize:** %s\n**Winners:** %d\n**Hosted by:** %s\n**Ends:** <t:%d:R>\n\nReact with 🎉 to enter!", prize, winners, hostName, endTime.Unix()),
 		Color:       ColorPurple,
 		Timestamp:   endTime.Format(time.RFC3339),
-		Footer:      &discordgo.MessageEmbedFooter{Text: "Ends at"},
+		Footer:      &discordgo.MessageEmbedFooter{Text: fmt.Sprintf("Hosted by %s  •  Ends at", hostName)},
 	}
 
 	_ = s.InteractionRespond(i.Interaction, &discordgo.InteractionResponse{
@@ -1472,10 +1500,18 @@ func handleWeather(s *discordgo.Session, i *discordgo.InteractionCreate, opts []
 		condition = cc.WeatherDesc[0].Value
 	}
 
-	desc := fmt.Sprintf("**Condition:** %s\n**Temperature:** %s°C / %s°F\n**Feels Like:** %s°C\n**Humidity:** %s%%\n**Wind:** %s km/h",
-		condition, cc.TempC, cc.TempF, cc.FeelsLikeC, cc.Humidity, cc.WindspeedKm)
-
-	embed := createInfoEmbed("🌤️ Weather in "+city, desc)
+	embed := richEmbed(richEmbedOpts{
+		Title:    "🌤️ Weather in " + city,
+		Color:    ColorBlue,
+		Category: "🛠️ Utility",
+		Fields: []*discordgo.MessageEmbedField{
+			miniField("🌡️ Temperature", fmt.Sprintf("%s°C / %s°F", cc.TempC, cc.TempF)),
+			miniField("🤒 Feels Like", cc.FeelsLikeC+"°C"),
+			miniField("☁️ Condition", condition),
+			miniField("💧 Humidity", cc.Humidity+"%"),
+			miniField("💨 Wind", cc.WindspeedKm+" km/h"),
+		},
+	})
 	editDeferredEmbed(s, i, embed, nil)
 }
 
@@ -1496,12 +1532,12 @@ func handleSticky(s *discordgo.Session, i *discordgo.InteractionCreate, opts []*
 		authorName = user.Username
 	}
 
-	embed := &discordgo.MessageEmbed{
+	embed := richEmbed(richEmbedOpts{
 		Title:       "📌 Sticky Message",
 		Description: message,
 		Color:       ColorYellow,
-		Footer:      &discordgo.MessageEmbedFooter{Text: "Pinned by " + authorName},
-		Timestamp:   time.Now().Format(time.RFC3339),
-	}
+		Category:    "📌 Sticky",
+		AuthorName:  authorName,
+	})
 	respondEmbed(s, i, embed)
 }

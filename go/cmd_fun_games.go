@@ -932,8 +932,8 @@ func handleTag(s *discordgo.Session, i *discordgo.InteractionCreate, opts []*dis
 
 		lines := []string{}
 		for idx, r := range rows {
-			lines = append(lines, fmt.Sprintf("%d. **%s** - %d wins, %d losses (%d coins earned)",
-				idx+1, r.Name, r.Wins, r.Losses, r.CoinsEarned))
+			lines = append(lines, fmt.Sprintf("%s **%s** — %d wins, %d losses (%s earned)",
+				medalPrefix(idx), r.Name, r.Wins, r.Losses, coinDisplay(r.CoinsEarned)))
 		}
 
 		embed := &discordgo.MessageEmbed{
@@ -941,7 +941,7 @@ func handleTag(s *discordgo.Session, i *discordgo.InteractionCreate, opts []*dis
 			Description: strings.Join(lines, "\n"),
 			Color:       ColorGold,
 			Timestamp:   time.Now().Format(time.RFC3339),
-			Footer:      &discordgo.MessageEmbedFooter{Text: "Discorbo"},
+			Footer:      embedFooter("⚔️ Battle"),
 		}
 		respondEmbed(s, i, embed)
 
@@ -977,7 +977,7 @@ func handleTag(s *discordgo.Session, i *discordgo.InteractionCreate, opts []*dis
 		respondEmbed(s, i, embed)
 
 	default:
-		respondText(s, i, "Unknown subcommand.")
+		respondError(s, i, "Error", "Unknown subcommand.")
 	}
 }
 

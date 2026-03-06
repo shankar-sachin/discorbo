@@ -14,7 +14,7 @@ import (
 func handleMaze(s *discordgo.Session, i *discordgo.InteractionCreate, opts []*discordgo.ApplicationCommandInteractionDataOption) {
 	user := interactionUser(i)
 	if user == nil {
-		respondText(s, i, "Unable to identify user for maze.")
+		respondError(s, i, "Error", "Unable to identify user for maze.")
 		return
 	}
 	levelIndex := int64(0)
@@ -106,7 +106,7 @@ func handleMazeLeaderboard(s *discordgo.Session, i *discordgo.InteractionCreate,
 	}
 	data, _ := readMazeScores()
 	if len(data) == 0 {
-		_ = s.InteractionRespond(i.Interaction, &discordgo.InteractionResponse{Type: discordgo.InteractionResponseChannelMessageWithSource, Data: &discordgo.InteractionResponseData{Content: "No maze completions yet."}})
+		respondError(s, i, "No Data", "No maze completions yet.")
 		return
 	}
 
@@ -131,9 +131,10 @@ func handleMazeLeaderboard(s *discordgo.Session, i *discordgo.InteractionCreate,
 		}
 		lines := []string{}
 		for i2, r := range rows {
-			lines = append(lines, fmt.Sprintf("%d. %s - Coins:%d Completions:%d", i2+1, r.Name, r.Coins, r.Completions))
+			lines = append(lines, fmt.Sprintf("%s **%s** — %s | **%d** completions", medalPrefix(i2), r.Name, coinDisplay(r.Coins), r.Completions))
 		}
-		_ = s.InteractionRespond(i.Interaction, &discordgo.InteractionResponse{Type: discordgo.InteractionResponseChannelMessageWithSource, Data: &discordgo.InteractionResponseData{Content: strings.Join(lines, "\n")}})
+		embed := createPuzzleEmbed("🏆 Maze Leaderboard", strings.Join(lines, "\n"))
+		respondEmbed(s, i, embed)
 		return
 	}
 
@@ -151,7 +152,7 @@ func handleMazeLeaderboard(s *discordgo.Session, i *discordgo.InteractionCreate,
 		}
 	}
 	if len(rows) == 0 {
-		_ = s.InteractionRespond(i.Interaction, &discordgo.InteractionResponse{Type: discordgo.InteractionResponseChannelMessageWithSource, Data: &discordgo.InteractionResponseData{Content: "No completions for this level yet."}})
+		respondError(s, i, "No Data", "No completions for this level yet.")
 		return
 	}
 	sort.Slice(rows, func(a, b int) bool {
@@ -165,9 +166,10 @@ func handleMazeLeaderboard(s *discordgo.Session, i *discordgo.InteractionCreate,
 	}
 	lines := []string{}
 	for i2, r := range rows {
-		lines = append(lines, fmt.Sprintf("%d. %s - %ds (%d coins)", i2+1, r.Name, r.Time, r.Coins))
+		lines = append(lines, fmt.Sprintf("%s **%s** — ⏱️ %ds | %s", medalPrefix(i2), r.Name, r.Time, coinDisplay(r.Coins)))
 	}
-	_ = s.InteractionRespond(i.Interaction, &discordgo.InteractionResponse{Type: discordgo.InteractionResponseChannelMessageWithSource, Data: &discordgo.InteractionResponseData{Content: strings.Join(lines, "\n")}})
+	embed := createPuzzleEmbed(fmt.Sprintf("🏆 Maze Leaderboard — Level %d", levelFilter), strings.Join(lines, "\n"))
+	respondEmbed(s, i, embed)
 }
 
 func step(state *gameState, direction string) error {
@@ -282,7 +284,7 @@ func buildMazeEmbed(state gameState, level levelDef, timeout bool) *discordgo.Me
 	}
 	desc += fmt.Sprintf("\u2764\uFE0F Lives: %d/3\n\U0001FA99 Coins: %d\n\u23F3 Time: %ds\n\U0001F3C3 Moves: %d\n\nKey: \U0001F7E6=You, \u2B1C=Path, \U0001F7EB=Wall, \U0001F3C1=Goal, \U0001FA99=Coin, \U0001F525=Spike, \U0001F47E=Enemy", state.Lives, state.Coins, timeLeft, state.Moves)
 
-	return &discordgo.MessageEmbed{Title: title, Description: desc, Color: color}
+	return &discordgo.MessageEmbed{Title: title, Description: desc, Color: color, Footer: embedFooter("🎮 Games"), Timestamp: time.Now().Format(time.RFC3339)}
 }
 
 func mazeCellEmoji(cell string) string {

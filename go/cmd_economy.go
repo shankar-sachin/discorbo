@@ -14,7 +14,7 @@ import (
 func handleShop(s *discordgo.Session, i *discordgo.InteractionCreate, opts []*discordgo.ApplicationCommandInteractionDataOption) {
 	user := interactionUser(i)
 	if user == nil {
-		respondText(s, i, "Unable to identify user.")
+		respondError(s, i, "Error", "Unable to identify user.")
 		return
 	}
 
@@ -31,7 +31,7 @@ func handleShop(s *discordgo.Session, i *discordgo.InteractionCreate, opts []*di
 	case "sell":
 		handleShopSell(s, i, subOpts, user)
 	default:
-		respondText(s, i, "Unknown subcommand.")
+		respondError(s, i, "Error", "Unknown subcommand.")
 	}
 }
 
@@ -40,7 +40,7 @@ func handleShopList(s *discordgo.Session, i *discordgo.InteractionCreate, opts [
 
 	catalog := map[string]shopItem{}
 	if err := readData("shop-catalog.json", &catalog); err != nil {
-		respondText(s, i, "Failed to load shop catalog.")
+		respondError(s, i, "Error", "Failed to load shop catalog.")
 		return
 	}
 
@@ -53,7 +53,7 @@ func handleShopList(s *discordgo.Session, i *discordgo.InteractionCreate, opts [
 	}
 
 	if len(items) == 0 {
-		respondText(s, i, "No items found in this category.")
+		respondError(s, i, "Error", "No items found in this category.")
 		return
 	}
 
@@ -69,8 +69,8 @@ func handleShopList(s *discordgo.Session, i *discordgo.InteractionCreate, opts [
 		if item.MaxOwned > 0 {
 			ownershipInfo = fmt.Sprintf(" (Max: %d)", item.MaxOwned)
 		}
-		lines = append(lines, fmt.Sprintf("%s **%s** - %d coins%s\n*%s*\nID: `%s`",
-			item.Emoji, item.Name, item.Price, ownershipInfo, item.Description, item.ID))
+		lines = append(lines, fmt.Sprintf("%s **%s** - %s%s\n*%s*\nID: `%s`",
+			item.Emoji, item.Name, coinDisplay(item.Price), ownershipInfo, item.Description, item.ID))
 	}
 
 	// Split into chunks if too long
@@ -98,24 +98,24 @@ func handleShopBuy(s *discordgo.Session, i *discordgo.InteractionCreate, opts []
 	quantity := int(optionInt(opts, "quantity", 1))
 
 	if itemID == "" {
-		respondText(s, i, "Item ID is required.")
+		respondError(s, i, "Error", "Item ID is required.")
 		return
 	}
 	if quantity < 1 {
-		respondText(s, i, "Quantity must be at least 1.")
+		respondError(s, i, "Error", "Quantity must be at least 1.")
 		return
 	}
 
 	// Load catalog
 	catalog := map[string]shopItem{}
 	if err := readData("shop-catalog.json", &catalog); err != nil {
-		respondText(s, i, "Failed to load shop catalog.")
+		respondError(s, i, "Error", "Failed to load shop catalog.")
 		return
 	}
 
 	item, exists := catalog[itemID]
 	if !exists {
-		respondText(s, i, fmt.Sprintf("Item `%s` not found in shop.", itemID))
+		respondError(s, i, "Error", fmt.Sprintf("Item `%s` not found in shop.", itemID))
 		return
 	}
 
@@ -144,14 +144,14 @@ func handleShopBuy(s *discordgo.Session, i *discordgo.InteractionCreate, opts []
 			}
 		}
 		if owned+quantity > item.MaxOwned {
-			respondText(s, i, fmt.Sprintf("You can only own %d of this item. You already have %d.", item.MaxOwned, owned))
+			respondError(s, i, "Error", fmt.Sprintf("You can only own %d of this item. You already have %d.", item.MaxOwned, owned))
 			return
 		}
 	}
 
 	totalCost := item.Price * quantity
 	if ecoUser.Coins < totalCost {
-		respondText(s, i, fmt.Sprintf("Not enough coins. Need %d, have %d.", totalCost, ecoUser.Coins))
+		respondError(s, i, "Error", fmt.Sprintf("Not enough coins. Need %s, have %s.", coinDisplay(totalCost), coinDisplay(ecoUser.Coins)))
 		return
 	}
 
@@ -183,8 +183,8 @@ func handleShopBuy(s *discordgo.Session, i *discordgo.InteractionCreate, opts []
 	logTransaction(user.ID, "purchase", itemID, -totalCost, "", "")
 
 	embed := createSuccessEmbed("Purchase Complete",
-		fmt.Sprintf("%s Bought **%dx %s** for %d coins\nRemaining balance: %d coins",
-			item.Emoji, quantity, item.Name, totalCost, ecoUser.Coins))
+		fmt.Sprintf("%s Bought **%dx %s** for %s\nRemaining balance: %s",
+			item.Emoji, quantity, item.Name, coinDisplay(totalCost), coinDisplay(ecoUser.Coins)))
 	respondEmbed(s, i, embed)
 }
 
@@ -193,24 +193,24 @@ func handleShopSell(s *discordgo.Session, i *discordgo.InteractionCreate, opts [
 	quantity := int(optionInt(opts, "quantity", 1))
 
 	if itemID == "" {
-		respondText(s, i, "Item ID is required.")
+		respondError(s, i, "Error", "Item ID is required.")
 		return
 	}
 	if quantity < 1 {
-		respondText(s, i, "Quantity must be at least 1.")
+		respondError(s, i, "Error", "Quantity must be at least 1.")
 		return
 	}
 
 	// Load catalog
 	catalog := map[string]shopItem{}
 	if err := readData("shop-catalog.json", &catalog); err != nil {
-		respondText(s, i, "Failed to load shop catalog.")
+		respondError(s, i, "Error", "Failed to load shop catalog.")
 		return
 	}
 
 	item, exists := catalog[itemID]
 	if !exists {
-		respondText(s, i, fmt.Sprintf("Item `%s` not found.", itemID))
+		respondError(s, i, "Error", fmt.Sprintf("Item `%s` not found.", itemID))
 		return
 	}
 
@@ -219,7 +219,7 @@ func handleShopSell(s *discordgo.Session, i *discordgo.InteractionCreate, opts [
 	_ = readData("economy-users.json", &economyUsers)
 	ecoUser := economyUsers[user.ID]
 	if ecoUser.Username == "" {
-		respondText(s, i, "You don't have any items to sell.")
+		respondError(s, i, "Error", "You don't have any items to sell.")
 		return
 	}
 
@@ -233,12 +233,12 @@ func handleShopSell(s *discordgo.Session, i *discordgo.InteractionCreate, opts [
 	}
 
 	if foundIdx == -1 {
-		respondText(s, i, fmt.Sprintf("You don't own any %s.", item.Name))
+		respondError(s, i, "Error", fmt.Sprintf("You don't own any %s.", item.Name))
 		return
 	}
 
 	if ecoUser.Inventory[foundIdx].Quantity < quantity {
-		respondText(s, i, fmt.Sprintf("You only have %d of this item.", ecoUser.Inventory[foundIdx].Quantity))
+		respondError(s, i, "Error", fmt.Sprintf("You only have %d of this item.", ecoUser.Inventory[foundIdx].Quantity))
 		return
 	}
 
@@ -261,8 +261,8 @@ func handleShopSell(s *discordgo.Session, i *discordgo.InteractionCreate, opts [
 	logTransaction(user.ID, "sell", itemID, refund, "", "")
 
 	embed := createSuccessEmbed("Sold Item",
-		fmt.Sprintf("Sold **%dx %s** for %d coins (50%% refund)\nNew balance: %d coins",
-			quantity, item.Name, refund, ecoUser.Coins))
+		fmt.Sprintf("Sold **%dx %s** for %s (50%% refund)\nNew balance: %s",
+			quantity, item.Name, coinDisplay(refund), coinDisplay(ecoUser.Coins)))
 	respondEmbed(s, i, embed)
 }
 
@@ -270,7 +270,7 @@ func handleShopSell(s *discordgo.Session, i *discordgo.InteractionCreate, opts [
 func handleInventory(s *discordgo.Session, i *discordgo.InteractionCreate, opts []*discordgo.ApplicationCommandInteractionDataOption) {
 	user := interactionUser(i)
 	if user == nil {
-		respondText(s, i, "Unable to identify user.")
+		respondError(s, i, "Error", "Unable to identify user.")
 		return
 	}
 
@@ -287,7 +287,7 @@ func handleInventory(s *discordgo.Session, i *discordgo.InteractionCreate, opts 
 	case "info":
 		handleInventoryInfo(s, i, subOpts, user)
 	default:
-		respondText(s, i, "Unknown subcommand.")
+		respondError(s, i, "Error", "Unknown subcommand.")
 	}
 }
 
@@ -297,7 +297,7 @@ func handleInventoryView(s *discordgo.Session, i *discordgo.InteractionCreate, u
 	ecoUser := economyUsers[user.ID]
 
 	if len(ecoUser.Inventory) == 0 {
-		respondText(s, i, "Your inventory is empty. Visit /shop to buy items!")
+		respondError(s, i, "Error", "Your inventory is empty. Visit /shop to buy items!")
 		return
 	}
 
@@ -314,9 +314,7 @@ func handleInventoryView(s *discordgo.Session, i *discordgo.InteractionCreate, u
 		Title:       "📦 Your Inventory",
 		Description: strings.Join(lines, "\n\n"),
 		Color:       ColorBlue,
-		Footer: &discordgo.MessageEmbedFooter{
-			Text: fmt.Sprintf("%d items | Use /inventory use <item_id> to activate", len(ecoUser.Inventory)),
-		},
+		Footer: &discordgo.MessageEmbedFooter{Text: fmt.Sprintf("%d items  •  " + botVersion, len(ecoUser.Inventory))},
 	}
 
 	respondEmbed(s, i, embed)
@@ -325,7 +323,7 @@ func handleInventoryView(s *discordgo.Session, i *discordgo.InteractionCreate, u
 func handleInventoryUse(s *discordgo.Session, i *discordgo.InteractionCreate, opts []*discordgo.ApplicationCommandInteractionDataOption, user *discordgo.User) {
 	itemID := strings.TrimSpace(optionString(opts, "item_id", ""))
 	if itemID == "" {
-		respondText(s, i, "Item ID is required.")
+		respondError(s, i, "Error", "Item ID is required.")
 		return
 	}
 
@@ -333,7 +331,7 @@ func handleInventoryUse(s *discordgo.Session, i *discordgo.InteractionCreate, op
 	_ = readData("shop-catalog.json", &catalog)
 	item, exists := catalog[itemID]
 	if !exists {
-		respondText(s, i, fmt.Sprintf("Item `%s` not found.", itemID))
+		respondError(s, i, "Error", fmt.Sprintf("Item `%s` not found.", itemID))
 		return
 	}
 
@@ -351,7 +349,7 @@ func handleInventoryUse(s *discordgo.Session, i *discordgo.InteractionCreate, op
 	}
 
 	if foundIdx == -1 {
-		respondText(s, i, fmt.Sprintf("You don't own any %s.", item.Name))
+		respondError(s, i, "Error", fmt.Sprintf("You don't own any %s.", item.Name))
 		return
 	}
 
@@ -436,18 +434,18 @@ func handleInventoryUse(s *discordgo.Session, i *discordgo.InteractionCreate, op
 		_ = writeData("economy-users.json", economyUsers)
 
 		embed := createSuccessEmbed("Mystery Box Opened!",
-			fmt.Sprintf("🎁 You received: **%s**\nNew balance: %d coins", reward, ecoUser.Coins))
+			fmt.Sprintf("🎁 You received: **%s**\nNew balance: %s", reward, coinDisplay(ecoUser.Coins)))
 		respondEmbed(s, i, embed)
 
 	} else {
-		respondText(s, i, "This item cannot be used directly. It may be a collectible or passive boost.")
+		respondError(s, i, "Error", "This item cannot be used directly. It may be a collectible or passive boost.")
 	}
 }
 
 func handleInventoryInfo(s *discordgo.Session, i *discordgo.InteractionCreate, opts []*discordgo.ApplicationCommandInteractionDataOption, user *discordgo.User) {
 	itemID := strings.TrimSpace(optionString(opts, "item_id", ""))
 	if itemID == "" {
-		respondText(s, i, "Item ID is required.")
+		respondError(s, i, "Error", "Item ID is required.")
 		return
 	}
 
@@ -455,7 +453,7 @@ func handleInventoryInfo(s *discordgo.Session, i *discordgo.InteractionCreate, o
 	_ = readData("shop-catalog.json", &catalog)
 	item, exists := catalog[itemID]
 	if !exists {
-		respondText(s, i, fmt.Sprintf("Item `%s` not found.", itemID))
+		respondError(s, i, "Error", fmt.Sprintf("Item `%s` not found.", itemID))
 		return
 	}
 
@@ -472,7 +470,7 @@ func handleInventoryInfo(s *discordgo.Session, i *discordgo.InteractionCreate, o
 	}
 
 	fields := []*discordgo.MessageEmbedField{
-		{Name: "Price", Value: fmt.Sprintf("%d coins", item.Price), Inline: true},
+		{Name: "Price", Value: coinDisplay(item.Price), Inline: true},
 		{Name: "Category", Value: item.Category, Inline: true},
 		{Name: "You Own", Value: fmt.Sprintf("%d", owned), Inline: true},
 	}
@@ -498,7 +496,7 @@ func handleInventoryInfo(s *discordgo.Session, i *discordgo.InteractionCreate, o
 		Description: item.Description,
 		Color:       ColorBlue,
 		Fields:      fields,
-		Footer:      &discordgo.MessageEmbedFooter{Text: fmt.Sprintf("ID: %s", item.ID)},
+		Footer:      &discordgo.MessageEmbedFooter{Text: fmt.Sprintf("ID: %s  •  " + botVersion, item.ID)},
 	}
 
 	respondEmbed(s, i, embed)
@@ -508,7 +506,7 @@ func handleInventoryInfo(s *discordgo.Session, i *discordgo.InteractionCreate, o
 func handleBalance(s *discordgo.Session, i *discordgo.InteractionCreate) {
 	user := interactionUser(i)
 	if user == nil {
-		respondText(s, i, "Unable to identify user.")
+		respondError(s, i, "Error", "Unable to identify user.")
 		return
 	}
 
@@ -563,7 +561,7 @@ func handleBalance(s *discordgo.Session, i *discordgo.InteractionCreate) {
 func handleTrade(s *discordgo.Session, i *discordgo.InteractionCreate, opts []*discordgo.ApplicationCommandInteractionDataOption) {
 	user := interactionUser(i)
 	if user == nil {
-		respondText(s, i, "Unable to identify user.")
+		respondError(s, i, "Error", "Unable to identify user.")
 		return
 	}
 
@@ -576,22 +574,22 @@ func handleTrade(s *discordgo.Session, i *discordgo.InteractionCreate, opts []*d
 	case "offer":
 		handleTradeOffer(s, i, subOpts, user)
 	default:
-		respondText(s, i, "Unknown subcommand.")
+		respondError(s, i, "Error", "Unknown subcommand.")
 	}
 }
 
 func handleTradeOffer(s *discordgo.Session, i *discordgo.InteractionCreate, opts []*discordgo.ApplicationCommandInteractionDataOption, user *discordgo.User) {
 	targetUser := optionUser(opts, "user")
 	if targetUser == nil {
-		respondText(s, i, "You must specify a user to trade with.")
+		respondError(s, i, "Error", "You must specify a user to trade with.")
 		return
 	}
 	if targetUser.Bot {
-		respondText(s, i, "You cannot trade with bots.")
+		respondError(s, i, "Error", "You cannot trade with bots.")
 		return
 	}
 	if targetUser.ID == user.ID {
-		respondText(s, i, "You cannot trade with yourself.")
+		respondError(s, i, "Error", "You cannot trade with yourself.")
 		return
 	}
 
@@ -602,6 +600,8 @@ func handleTradeOffer(s *discordgo.Session, i *discordgo.InteractionCreate, opts
 		Title:       "🤝 Trade Request",
 		Description: fmt.Sprintf("%s wants to trade with you!\n\nClick Accept to start trading.", user.Username),
 		Color:       ColorPurple,
+		Footer:      embedFooter("💰 Economy"),
+		Timestamp:   time.Now().Format(time.RFC3339),
 	}
 
 	buttons := discordgo.ActionsRow{
@@ -665,19 +665,19 @@ func handleTradeOffer(s *discordgo.Session, i *discordgo.InteractionCreate, opts
 func handleEconomyAdmin(s *discordgo.Session, i *discordgo.InteractionCreate, opts []*discordgo.ApplicationCommandInteractionDataOption) {
 	// Check admin permission
 	if i.Member == nil || (i.Member.Permissions&discordgo.PermissionAdministrator) == 0 {
-		respondText(s, i, "This command requires Administrator permission.")
+		respondError(s, i, "Error", "This command requires Administrator permission.")
 		return
 	}
 
 	sub, subOpts := getSubcommand(opts)
 	if sub == "" {
-		respondText(s, i, "Subcommand required.")
+		respondError(s, i, "Error", "Subcommand required.")
 		return
 	}
 
 	admin := interactionUser(i)
 	if admin == nil {
-		respondText(s, i, "Unable to identify admin.")
+		respondError(s, i, "Error", "Unable to identify admin.")
 		return
 	}
 
@@ -688,7 +688,7 @@ func handleEconomyAdmin(s *discordgo.Session, i *discordgo.InteractionCreate, op
 		reason := optionString(subOpts, "reason", "Admin grant")
 
 		if targetUser == nil || coins <= 0 {
-			respondText(s, i, "Valid user and positive coin amount required.")
+			respondError(s, i, "Error", "Valid user and positive coin amount required.")
 			return
 		}
 
@@ -704,7 +704,7 @@ func handleEconomyAdmin(s *discordgo.Session, i *discordgo.InteractionCreate, op
 		logTransaction(targetUser.ID, "admin_grant", "", coins, admin.ID, reason)
 
 		embed := createSuccessEmbed("Coins Granted",
-			fmt.Sprintf("Granted **%d coins** to %s\nReason: %s", coins, targetUser.Username, reason))
+			fmt.Sprintf("Granted %s to %s\nReason: %s", coinDisplay(coins), targetUser.Username, reason))
 		respondEmbed(s, i, embed)
 
 	case "take":
@@ -713,7 +713,7 @@ func handleEconomyAdmin(s *discordgo.Session, i *discordgo.InteractionCreate, op
 		reason := optionString(subOpts, "reason", "Admin removal")
 
 		if targetUser == nil || coins <= 0 {
-			respondText(s, i, "Valid user and positive coin amount required.")
+			respondError(s, i, "Error", "Valid user and positive coin amount required.")
 			return
 		}
 
@@ -727,7 +727,7 @@ func handleEconomyAdmin(s *discordgo.Session, i *discordgo.InteractionCreate, op
 		logTransaction(targetUser.ID, "admin_take", "", -coins, admin.ID, reason)
 
 		embed := createSuccessEmbed("Coins Removed",
-			fmt.Sprintf("Removed **%d coins** from %s\nReason: %s", coins, targetUser.Username, reason))
+			fmt.Sprintf("Removed %s from %s\nReason: %s", coinDisplay(coins), targetUser.Username, reason))
 		respondEmbed(s, i, embed)
 
 	case "transactions":
@@ -743,7 +743,7 @@ func handleEconomyAdmin(s *discordgo.Session, i *discordgo.InteractionCreate, op
 		}
 
 		if len(filtered) == 0 {
-			respondText(s, i, "No transactions found.")
+			respondError(s, i, "Error", "No transactions found.")
 			return
 		}
 
@@ -754,8 +754,8 @@ func handleEconomyAdmin(s *discordgo.Session, i *discordgo.InteractionCreate, op
 
 		lines := []string{}
 		for _, t := range filtered {
-			lines = append(lines, fmt.Sprintf("• **%s**: %+d coins - %s (<t:%d:R>)",
-				t.Type, t.Amount, t.Reason, t.Timestamp/1000))
+			lines = append(lines, fmt.Sprintf("• **%s**: %s - %s (<t:%d:R>)",
+				t.Type, coinDisplay(t.Amount), t.Reason, t.Timestamp/1000))
 		}
 
 		title := "Recent Transactions"
@@ -767,11 +767,13 @@ func handleEconomyAdmin(s *discordgo.Session, i *discordgo.InteractionCreate, op
 			Title:       title,
 			Description: strings.Join(lines, "\n"),
 			Color:       ColorBlue,
+			Footer:      embedFooter("💰 Economy"),
+			Timestamp:   time.Now().Format(time.RFC3339),
 		}
 		respondEmbed(s, i, embed)
 
 	default:
-		respondText(s, i, "Unknown subcommand.")
+		respondError(s, i, "Error", "Unknown subcommand.")
 	}
 }
 
@@ -864,21 +866,21 @@ func handleEconomyCmd(s *discordgo.Session, i *discordgo.InteractionCreate) {
 func handleRob(s *discordgo.Session, i *discordgo.InteractionCreate, opts []*discordgo.ApplicationCommandInteractionDataOption) {
 	user := interactionUser(i)
 	if user == nil {
-		respondText(s, i, "Unable to identify user.")
+		respondError(s, i, "Error", "Unable to identify user.")
 		return
 	}
 
 	target := optionUser(opts, "user")
 	if target == nil {
-		respondText(s, i, "You must specify a user to rob.")
+		respondError(s, i, "Error", "You must specify a user to rob.")
 		return
 	}
 	if target.Bot {
-		respondText(s, i, "You cannot rob bots.")
+		respondError(s, i, "Error", "You cannot rob bots.")
 		return
 	}
 	if target.ID == user.ID {
-		respondText(s, i, "You cannot rob yourself.")
+		respondError(s, i, "Error", "You cannot rob yourself.")
 		return
 	}
 
@@ -913,7 +915,7 @@ func handleRob(s *discordgo.Session, i *discordgo.InteractionCreate, opts []*dis
 		modifyCoins(target.ID, target.Username, -stolen)
 		newBal := modifyCoins(user.ID, user.Username, stolen)
 		respondEmbed(s, i, createSuccessEmbed("💰 Rob Successful!",
-			fmt.Sprintf("You stole **%d coins** (%d%%) from %s!\nYour balance: **%d coins**", stolen, pct, target.Username, newBal)))
+			fmt.Sprintf("You stole %s (%d%%) from %s!\nYour balance: %s", coinDisplay(stolen), pct, target.Username, coinDisplay(newBal))))
 	} else {
 		// Fail: pay fine of 100 coins
 		fine := 100
@@ -923,7 +925,7 @@ func handleRob(s *discordgo.Session, i *discordgo.InteractionCreate, opts []*dis
 		}
 		newBal := modifyCoins(user.ID, user.Username, -fine)
 		respondEmbed(s, i, createErrorEmbed("🚔 Rob Failed!",
-			fmt.Sprintf("You were caught trying to rob %s!\nYou paid a fine of **%d coins**.\nYour balance: **%d coins**", target.Username, fine, newBal)))
+			fmt.Sprintf("You were caught trying to rob %s!\nYou paid a fine of %s.\nYour balance: %s", target.Username, coinDisplay(fine), coinDisplay(newBal))))
 	}
 }
 
@@ -932,7 +934,7 @@ func handleRob(s *discordgo.Session, i *discordgo.InteractionCreate, opts []*dis
 func handleGift(s *discordgo.Session, i *discordgo.InteractionCreate, opts []*discordgo.ApplicationCommandInteractionDataOption) {
 	user := interactionUser(i)
 	if user == nil {
-		respondText(s, i, "Unable to identify user.")
+		respondError(s, i, "Error", "Unable to identify user.")
 		return
 	}
 
@@ -940,25 +942,25 @@ func handleGift(s *discordgo.Session, i *discordgo.InteractionCreate, opts []*di
 	amount := int(optionInt(opts, "amount", 0))
 
 	if target == nil {
-		respondText(s, i, "You must specify a recipient.")
+		respondError(s, i, "Error", "You must specify a recipient.")
 		return
 	}
 	if target.Bot {
-		respondText(s, i, "You cannot gift coins to bots.")
+		respondError(s, i, "Error", "You cannot gift coins to bots.")
 		return
 	}
 	if target.ID == user.ID {
-		respondText(s, i, "You cannot gift coins to yourself.")
+		respondError(s, i, "Error", "You cannot gift coins to yourself.")
 		return
 	}
 	if amount <= 0 {
-		respondText(s, i, "Gift amount must be positive.")
+		respondError(s, i, "Error", "Gift amount must be positive.")
 		return
 	}
 
 	myCoins, _ := getCoins(user.ID)
 	if myCoins < amount {
-		respondEmbed(s, i, createErrorEmbed("Insufficient Funds", fmt.Sprintf("You only have **%d coins** but tried to gift **%d**.", myCoins, amount)))
+		respondEmbed(s, i, createErrorEmbed("Insufficient Funds", fmt.Sprintf("You only have %s but tried to gift %s.", coinDisplay(myCoins), coinDisplay(amount))))
 		return
 	}
 
@@ -970,7 +972,7 @@ func handleGift(s *discordgo.Session, i *discordgo.InteractionCreate, opts []*di
 
 	newBal, _ := getCoins(user.ID)
 	respondEmbed(s, i, createSuccessEmbed("🎁 Gift Sent!",
-		fmt.Sprintf("You gifted **%d coins** to %s!\nYour balance: **%d coins**", amount, target.Username, newBal)))
+		fmt.Sprintf("You gifted %s to %s!\nYour balance: %s", coinDisplay(amount), target.Username, coinDisplay(newBal))))
 }
 
 // ─── Leaderboard ───────────────────────────────────────────────────────────────
@@ -999,7 +1001,7 @@ func handleEconomyLeaderboard(s *discordgo.Session, i *discordgo.InteractionCrea
 	}
 
 	if len(entries) == 0 {
-		respondText(s, i, "No users in the economy yet.")
+		respondError(s, i, "Error", "No users in the economy yet.")
 		return
 	}
 
@@ -1051,7 +1053,7 @@ var workJobs = []string{
 func handleWork(s *discordgo.Session, i *discordgo.InteractionCreate) {
 	user := interactionUser(i)
 	if user == nil {
-		respondText(s, i, "Unable to identify user.")
+		respondError(s, i, "Error", "Unable to identify user.")
 		return
 	}
 
@@ -1072,7 +1074,7 @@ func handleWork(s *discordgo.Session, i *discordgo.InteractionCreate) {
 	logTransaction(user.ID, "work", "", earned, "", "Work earnings")
 
 	respondEmbed(s, i, createSuccessEmbed("💼 Work Complete!",
-		fmt.Sprintf("%s\n\nYou earned **%d coins**!\nBalance: **%d coins**", job, earned, newBal)))
+		fmt.Sprintf("%s\n\nYou earned %s!\nBalance: %s", job, coinDisplay(earned), coinDisplay(newBal))))
 }
 
 // ─── Lottery ───────────────────────────────────────────────────────────────────
@@ -1080,20 +1082,20 @@ func handleWork(s *discordgo.Session, i *discordgo.InteractionCreate) {
 func handleLottery(s *discordgo.Session, i *discordgo.InteractionCreate, opts []*discordgo.ApplicationCommandInteractionDataOption) {
 	user := interactionUser(i)
 	if user == nil {
-		respondText(s, i, "Unable to identify user.")
+		respondError(s, i, "Error", "Unable to identify user.")
 		return
 	}
 
 	tickets := int(optionInt(opts, "tickets", 1))
 	if tickets < 1 || tickets > 10 {
-		respondText(s, i, "You can buy 1-10 tickets.")
+		respondError(s, i, "Error", "You can buy 1-10 tickets.")
 		return
 	}
 
 	cost := tickets * 10
 	myCoins, _ := getCoins(user.ID)
 	if myCoins < cost {
-		respondEmbed(s, i, createErrorEmbed("Insufficient Funds", fmt.Sprintf("You need **%d coins** but only have **%d**.", cost, myCoins)))
+		respondEmbed(s, i, createErrorEmbed("Insufficient Funds", fmt.Sprintf("You need %s but only have %s.", coinDisplay(cost), coinDisplay(myCoins))))
 		return
 	}
 
@@ -1149,12 +1151,12 @@ func handleLottery(s *discordgo.Session, i *discordgo.InteractionCreate, opts []
 			resultText),
 		Color: ColorPurple,
 		Fields: []*discordgo.MessageEmbedField{
-			{Name: "🎫 Tickets", Value: fmt.Sprintf("%d (cost: %d coins)", tickets, cost), Inline: true},
-			{Name: "💰 Winnings", Value: fmt.Sprintf("%d coins (%dx)", winnings, multiplier), Inline: true},
-			{Name: "💳 Balance", Value: fmt.Sprintf("%d coins", newBal), Inline: true},
+			{Name: "🎫 Tickets", Value: fmt.Sprintf("%d (cost: %s)", tickets, coinDisplay(cost)), Inline: true},
+			{Name: "💰 Winnings", Value: fmt.Sprintf("%s (%dx)", coinDisplay(winnings), multiplier), Inline: true},
+			{Name: "💳 Balance", Value: coinDisplay(newBal), Inline: true},
 		},
 		Timestamp: time.Now().Format(time.RFC3339),
-		Footer:    &discordgo.MessageEmbedFooter{Text: "Discorbo Lottery"},
+		Footer:    embedFooter("🎰 Lottery"),
 	}
 	respondEmbed(s, i, embed)
 }

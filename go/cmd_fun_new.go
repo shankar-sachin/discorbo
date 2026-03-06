@@ -358,8 +358,9 @@ func handleFakeTweet(s *discordgo.Session, i *discordgo.InteractionCreate, opts 
 			{Name: "❤️ Likes", Value: formatCount(likes), Inline: true},
 		},
 		Footer: &discordgo.MessageEmbedFooter{
-			Text: "Twitter • " + time.Now().Format("3:04 PM · Jan 2, 2006"),
+			Text: "Twitter  •  " + time.Now().Format("3:04 PM · Jan 2, 2006"),
 		},
+		Timestamp: time.Now().Format(time.RFC3339),
 	}
 	respondEmbed(s, i, embed)
 }

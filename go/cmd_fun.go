@@ -314,7 +314,8 @@ func handleAPIFun(s *discordgo.Session, i *discordgo.InteractionCreate, cmd stri
 			Color:       0xEB459E,
 			URL:         "https://reddit.com" + p.Permalink,
 			Image:       &discordgo.MessageEmbedImage{URL: p.URL},
-			Footer:      &discordgo.MessageEmbedFooter{Text: "r/" + sub + " • Discorbo"},
+			Footer:      &discordgo.MessageEmbedFooter{Text: "r/" + sub + "  •  " + botVersion},
+			Timestamp:   time.Now().Format(time.RFC3339),
 		}
 		editDeferredEmbed(s, i, embed, nil)
 	case "trivia":
@@ -405,13 +406,15 @@ func handleAPIFun(s *discordgo.Session, i *discordgo.InteractionCreate, cmd stri
 			Title:       "\U0001F9E0 Trivia - " + q.Category,
 			Description: fmt.Sprintf("**%s**\n\n\U0001F3AF Difficulty: %s\n\U0001F4AF Points: %d", html.UnescapeString(q.Question), strings.ToUpper(q.Difficulty), points),
 			Color:       0xEB459E,
+			Footer:      embedFooter("🎮 Trivia"),
+			Timestamp:   time.Now().Format(time.RFC3339),
 		}
 		editDeferredEmbed(s, i, embed, rows)
 	case "trivia-leaderboard":
 		scores := map[string]triviaScore{}
 		_ = readData("trivia-scores.json", &scores)
 		if len(scores) == 0 {
-			respondText(s, i, "No scores yet. Use /trivia to start playing.")
+			respondError(s, i, "No Data", "No scores yet. Use `/fun trivia` to start playing!")
 			return
 		}
 		type row struct {
@@ -432,9 +435,10 @@ func handleAPIFun(s *discordgo.Session, i *discordgo.InteractionCreate, cmd stri
 			if r.Total > 0 {
 				acc = float64(r.Correct) * 100 / float64(r.Total)
 			}
-			lines = append(lines, fmt.Sprintf("%d. %s - %d pts (%.1f%%)", idx+1, r.Username, r.Score, acc))
+			lines = append(lines, fmt.Sprintf("%s **%s** — %d pts (%.1f%% accuracy)", medalPrefix(idx), r.Username, r.Score, acc))
 		}
-		respondText(s, i, strings.Join(lines, "\n"))
+		embed := createFunEmbed("🏆 Trivia Leaderboard", strings.Join(lines, "\n"))
+		respondEmbed(s, i, embed)
 	}
 }
 

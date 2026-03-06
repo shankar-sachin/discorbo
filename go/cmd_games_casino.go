@@ -144,13 +144,13 @@ func handleCasinoCmd(s *discordgo.Session, i *discordgo.InteractionCreate) {
 func handleBlackjack(s *discordgo.Session, i *discordgo.InteractionCreate, opts []*discordgo.ApplicationCommandInteractionDataOption) {
 	user := interactionUser(i)
 	if user == nil {
-		respondText(s, i, "Unable to identify user.")
+		respondError(s, i, "Error", "Unable to identify user.")
 		return
 	}
 	bet := int(optionInt(opts, "bet", 10))
 	coins, _ := getCoins(user.ID)
 	if coins < bet {
-		respondEmbed(s, i, createErrorEmbed("Insufficient Funds", fmt.Sprintf("You only have **%d coins** but tried to bet **%d**.", coins, bet)))
+		respondEmbed(s, i, createErrorEmbed("Insufficient Funds", fmt.Sprintf("You only have %s but tried to bet %s.", coinDisplay(coins), coinDisplay(bet))))
 		return
 	}
 
@@ -171,9 +171,9 @@ func handleBlackjack(s *discordgo.Session, i *discordgo.InteractionCreate, opts 
 	if handValue(playerHand) == 21 {
 		payout := int(float64(bet) * 1.5)
 		newBal := modifyCoins(user.ID, user.Username, payout)
-		embed := createFunEmbed("🃏 Blackjack!", fmt.Sprintf(
-			"**Your hand:** %s (21)\n**Dealer:** %s %s\n\n🎉 **BLACKJACK!** You win **+%d coins**!\nBalance: **%d coins**",
-			handStr(playerHand), dealerHand[0], "??", payout, newBal))
+		embed := createCasinoEmbed("🃏 Blackjack!", fmt.Sprintf(
+			"**Your hand:** %s (21)\n**Dealer:** %s %s\n\n🎉 **BLACKJACK!** You win +%s!\nBalance: %s",
+			handStr(playerHand), dealerHand[0], "??", coinDisplay(payout), coinDisplay(newBal)))
 		respondEmbed(s, i, embed)
 		return
 	}
@@ -282,7 +282,7 @@ func handleBJComponent(s *discordgo.Session, i *discordgo.InteractionCreate) {
 			coins, _ := getCoins(user.ID)
 			embeds := buildBJEmbeds(sess, true)
 			embeds[0].Color = ColorRed
-			embeds[0].Description = fmt.Sprintf("💥 **Bust!** You went over 21.\nYou lose **%d coins**.\nBalance: **%d coins**", sess.Bet, coins)
+			embeds[0].Description = fmt.Sprintf("💥 **Bust!** You went over 21.\nYou lose %s.\nBalance: %s", coinDisplay(sess.Bet), coinDisplay(coins))
 			_ = s.InteractionRespond(i.Interaction, &discordgo.InteractionResponse{
 				Type: discordgo.InteractionResponseUpdateMessage,
 				Data: &discordgo.InteractionResponseData{Embeds: embeds, Components: []discordgo.MessageComponent{}},
@@ -328,11 +328,11 @@ func handleBJComponent(s *discordgo.Session, i *discordgo.InteractionCreate) {
 		if pv > 21 {
 			embeds[0].Color = ColorRed
 			coins, _ := getCoins(user.ID)
-			result = fmt.Sprintf("💥 **Bust!** You lose **%d coins**.", sess.Bet)
+			result = fmt.Sprintf("💥 **Bust!** You lose %s.", coinDisplay(sess.Bet))
 			newBal = coins
 		} else if dv > 21 || pv > dv {
 			newBal = modifyCoins(user.ID, user.Username, sess.Bet*2)
-			result = fmt.Sprintf("🎉 **You win!** +**%d coins**!", sess.Bet)
+			result = fmt.Sprintf("🎉 **You win!** +%s!", coinDisplay(sess.Bet))
 			embeds[0].Color = ColorGreen
 		} else if pv == dv {
 			newBal = modifyCoins(user.ID, user.Username, sess.Bet)
@@ -340,11 +340,11 @@ func handleBJComponent(s *discordgo.Session, i *discordgo.InteractionCreate) {
 			embeds[0].Color = ColorGray
 		} else {
 			coins, _ := getCoins(user.ID)
-			result = fmt.Sprintf("😞 **Dealer wins.** You lose **%d coins**.", sess.Bet)
+			result = fmt.Sprintf("😞 **Dealer wins.** You lose %s.", coinDisplay(sess.Bet))
 			embeds[0].Color = ColorRed
 			newBal = coins
 		}
-		embeds[0].Description = result + fmt.Sprintf("\nBalance: **%d coins**", newBal)
+		embeds[0].Description = result + fmt.Sprintf("\nBalance: %s", coinDisplay(newBal))
 		_ = s.InteractionRespond(i.Interaction, &discordgo.InteractionResponse{
 			Type: discordgo.InteractionResponseUpdateMessage,
 			Data: &discordgo.InteractionResponseData{Embeds: embeds, Components: []discordgo.MessageComponent{}},
@@ -380,13 +380,13 @@ func weightedSlot() string {
 func handleSlots(s *discordgo.Session, i *discordgo.InteractionCreate, opts []*discordgo.ApplicationCommandInteractionDataOption) {
 	user := interactionUser(i)
 	if user == nil {
-		respondText(s, i, "Unable to identify user.")
+		respondError(s, i, "Error", "Unable to identify user.")
 		return
 	}
 	bet := int(optionInt(opts, "bet", 10))
 	coins, _ := getCoins(user.ID)
 	if coins < bet {
-		respondEmbed(s, i, createErrorEmbed("Insufficient Funds", fmt.Sprintf("You only have **%d coins** but tried to bet **%d**.", coins, bet)))
+		respondEmbed(s, i, createErrorEmbed("Insufficient Funds", fmt.Sprintf("You only have %s but tried to bet %s.", coinDisplay(coins), coinDisplay(bet))))
 		return
 	}
 
@@ -421,14 +421,14 @@ func handleSlots(s *discordgo.Session, i *discordgo.InteractionCreate, opts []*d
 	if mult > 0 {
 		win := int(float64(bet) * mult)
 		newBal = modifyCoins(user.ID, user.Username, win-bet)
-		coinResult = fmt.Sprintf("+**%d coins** (%.1fx multiplier)", win-bet, mult)
+		coinResult = fmt.Sprintf("+%s (%.1fx multiplier)", coinDisplay(win-bet), mult)
 	} else {
 		newBal = modifyCoins(user.ID, user.Username, -bet)
-		coinResult = fmt.Sprintf("-**%d coins**", bet)
+		coinResult = fmt.Sprintf("-%s", coinDisplay(bet))
 	}
 
-	embed := createFunEmbed("🎰 Slot Machine", fmt.Sprintf(
-		"**━━━━━━━━━━━━━━━**\n  %s\n**━━━━━━━━━━━━━━━**\n\n%s\n%s\n💳 Balance: **%d coins**", display, resultText, coinResult, newBal))
+	embed := createCasinoEmbed("🎰 Slot Machine", fmt.Sprintf(
+		"**━━━━━━━━━━━━━━━**\n  %s\n**━━━━━━━━━━━━━━━**\n\n%s\n%s\n💳 Balance: %s", display, resultText, coinResult, coinDisplay(newBal)))
 	respondEmbed(s, i, embed)
 }
 
@@ -437,7 +437,7 @@ func handleSlots(s *discordgo.Session, i *discordgo.InteractionCreate, opts []*d
 func handleRoulette(s *discordgo.Session, i *discordgo.InteractionCreate, opts []*discordgo.ApplicationCommandInteractionDataOption) {
 	user := interactionUser(i)
 	if user == nil {
-		respondText(s, i, "Unable to identify user.")
+		respondError(s, i, "Error", "Unable to identify user.")
 		return
 	}
 	bet := int(optionInt(opts, "bet", 10))
@@ -445,7 +445,7 @@ func handleRoulette(s *discordgo.Session, i *discordgo.InteractionCreate, opts [
 
 	coins, _ := getCoins(user.ID)
 	if coins < bet {
-		respondEmbed(s, i, createErrorEmbed("Insufficient Funds", fmt.Sprintf("You only have **%d coins** but tried to bet **%d**.", coins, bet)))
+		respondEmbed(s, i, createErrorEmbed("Insufficient Funds", fmt.Sprintf("You only have %s but tried to bet %s.", coinDisplay(coins), coinDisplay(bet))))
 		return
 	}
 
@@ -494,13 +494,13 @@ func handleRoulette(s *discordgo.Session, i *discordgo.InteractionCreate, opts [
 	if win {
 		payout := int(float64(bet) * mult)
 		newBal = modifyCoins(user.ID, user.Username, payout-bet)
-		resultText = fmt.Sprintf("🎉 **You win!** +**%d coins** (%.0fx)\nBalance: **%d coins**", payout-bet, mult, newBal)
+		resultText = fmt.Sprintf("🎉 **You win!** +%s (%.0fx)\nBalance: %s", coinDisplay(payout-bet), mult, coinDisplay(newBal))
 	} else {
 		newBal = modifyCoins(user.ID, user.Username, -bet)
-		resultText = fmt.Sprintf("😞 **You lose** **%d coins**.\nBalance: **%d coins**", bet, newBal)
+		resultText = fmt.Sprintf("😞 **You lose** %s.\nBalance: %s", coinDisplay(bet), coinDisplay(newBal))
 	}
 
-	embed := createFunEmbed("🎱 Roulette", fmt.Sprintf(
+	embed := createCasinoEmbed("🎱 Roulette", fmt.Sprintf(
 		"🎡 The wheel spins...\n\nThe ball lands on %s\n\n🎲 You bet on: **%s**\n\n%s",
 		renderRouletteResult(spin), choice, resultText))
 	respondEmbed(s, i, embed)
@@ -527,7 +527,7 @@ var rrDeathTexts = []string{
 func handleRussianRoulette(s *discordgo.Session, i *discordgo.InteractionCreate, opts []*discordgo.ApplicationCommandInteractionDataOption) {
 	user := interactionUser(i)
 	if user == nil {
-		respondText(s, i, "Unable to identify user.")
+		respondError(s, i, "Error", "Unable to identify user.")
 		return
 	}
 	chambers := int(optionInt(opts, "chambers", 6))
@@ -547,12 +547,12 @@ func handleRussianRoulette(s *discordgo.Session, i *discordgo.InteractionCreate,
 		coins := modifyCoins(user.ID, user.Username, reward)
 		text := rrSurviveTexts[rand.Intn(len(rrSurviveTexts))]
 		embed = createSuccessEmbed("🔫 Russian Roulette",
-			fmt.Sprintf("%s\n\n%s\n\n💰 **+%d coins!** Balance: **%d coins**", chamberDisplay, text, reward, coins))
+			fmt.Sprintf("%s\n\n%s\n\n💰 +%s! Balance: %s", chamberDisplay, text, coinDisplay(reward), coinDisplay(coins)))
 	} else {
 		coins := modifyCoins(user.ID, user.Username, -loss)
 		text := rrDeathTexts[rand.Intn(len(rrDeathTexts))]
 		embed = createErrorEmbed("🔫 Russian Roulette",
-			fmt.Sprintf("%s\n\n%s\n\n💸 **-%d coins.** Balance: **%d coins**", chamberDisplay, text, loss, coins))
+			fmt.Sprintf("%s\n\n%s\n\n💸 -%s. Balance: %s", chamberDisplay, text, coinDisplay(loss), coinDisplay(coins)))
 	}
 
 	embed.Fields = []*discordgo.MessageEmbedField{
@@ -567,13 +567,13 @@ func handleRussianRoulette(s *discordgo.Session, i *discordgo.InteractionCreate,
 func handleWar(s *discordgo.Session, i *discordgo.InteractionCreate, opts []*discordgo.ApplicationCommandInteractionDataOption) {
 	user := interactionUser(i)
 	if user == nil {
-		respondText(s, i, "Unable to identify user.")
+		respondError(s, i, "Error", "Unable to identify user.")
 		return
 	}
 	bet := int(optionInt(opts, "bet", 10))
 	coins, _ := getCoins(user.ID)
 	if coins < bet {
-		respondEmbed(s, i, createErrorEmbed("Insufficient Funds", fmt.Sprintf("You only have **%d coins** but tried to bet **%d**.", coins, bet)))
+		respondEmbed(s, i, createErrorEmbed("Insufficient Funds", fmt.Sprintf("You only have %s but tried to bet %s.", coinDisplay(coins), coinDisplay(bet))))
 		return
 	}
 
@@ -588,13 +588,13 @@ func handleWar(s *discordgo.Session, i *discordgo.InteractionCreate, opts []*dis
 	if pv > bv {
 		newBal := modifyCoins(user.ID, user.Username, bet)
 		embed = createSuccessEmbed("⚔️ War — You Win!",
-			fmt.Sprintf("%s\n\n🎉 Higher card! **+%d coins**\n💳 Balance: **%d coins**",
-				warDisplay, bet, newBal))
+			fmt.Sprintf("%s\n\n🎉 Higher card! +%s\n💳 Balance: %s",
+				warDisplay, coinDisplay(bet), coinDisplay(newBal)))
 	} else if bv > pv {
 		newBal := modifyCoins(user.ID, user.Username, -bet)
 		embed = createErrorEmbed("⚔️ War — You Lose",
-			fmt.Sprintf("%s\n\n😞 Lower card. **-%d coins**\n💳 Balance: **%d coins**",
-				warDisplay, bet, newBal))
+			fmt.Sprintf("%s\n\n😞 Lower card. -%s\n💳 Balance: %s",
+				warDisplay, coinDisplay(bet), coinDisplay(newBal)))
 	} else {
 		embed = createInfoEmbed("⚔️ War — Tie!",
 			fmt.Sprintf("%s\n\n🤝 Tie! Bet refunded.",

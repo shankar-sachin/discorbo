@@ -492,11 +492,11 @@ func handleTradeComponent(s *discordgo.Session, i *discordgo.InteractionCreate) 
 		_ = writeData("economy-users.json", economyUsers)
 
 		// Build summary
-		summaryLines := fmt.Sprintf("<@%s> gave: **%d coins**", initiatorID, initOffer.Coins)
+		summaryLines := fmt.Sprintf("<@%s> gave: %s", initiatorID, coinDisplay(initOffer.Coins))
 		if len(initOffer.ItemIDs) > 0 {
 			summaryLines += fmt.Sprintf(" + %d item(s)", len(initOffer.ItemIDs))
 		}
-		summaryLines += fmt.Sprintf("\n<@%s> gave: **%d coins**", targetID, targetOffer.Coins)
+		summaryLines += fmt.Sprintf("\n<@%s> gave: %s", targetID, coinDisplay(targetOffer.Coins))
 		if len(targetOffer.ItemIDs) > 0 {
 			summaryLines += fmt.Sprintf(" + %d item(s)", len(targetOffer.ItemIDs))
 		}
@@ -714,13 +714,13 @@ func handleTagComponent(s *discordgo.Session, i *discordgo.InteractionCreate) {
 
 				embed.Fields = append(embed.Fields, &discordgo.MessageEmbedField{
 					Name:   "🏆 Winner",
-					Value:  fmt.Sprintf("%s wins and earns %d coins!", winner, coins),
+					Value:  fmt.Sprintf("%s wins and earns %s!", winner, coinDisplay(coins)),
 					Inline: false,
 				})
 			} else {
 				embed.Fields = append(embed.Fields, &discordgo.MessageEmbedField{
 					Name:   "⚖️ Draw",
-					Value:  "Maximum moves reached! Both players earn 10 coins.",
+					Value:  fmt.Sprintf("Maximum moves reached! Both players earn %s.", coinDisplay(10)),
 					Inline: false,
 				})
 

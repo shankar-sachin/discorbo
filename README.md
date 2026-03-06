@@ -1,6 +1,16 @@
 # Discorbo 🤖
 
-A comprehensive Discord bot with 105+ slash commands for moderation, RPG, casino, economy, music, leveling, and community features. Built with Go and discordgo. Visit [the website](https://tinyurl.com/discorbo).
+A comprehensive Discord bot with **105+ slash commands** for moderation, RPG, casino, economy, music, leveling, and community features. Built with **Go** and [discordgo](https://github.com/bwmarrin/discordgo).
+
+[![Version](https://img.shields.io/badge/version-2.2.0-blue)]()
+[![Go](https://img.shields.io/badge/Go-1.21+-00ADD8?logo=go)]()
+[![License](https://img.shields.io/badge/license-MIT-green)]()
+
+🌐 **[Website](https://tinyurl.com/discorbo)** · **[Invite Discorbo](https://discord.com/oauth2/authorize?client_id=1472679226330059023&permissions=277025770560&scope=bot%20applications.commands)**
+
+> **Note:** Please don't publish Discorbo as your own app — just invite it to your server using the link above!
+
+---
 
 ## Features
 
@@ -11,31 +21,31 @@ A comprehensive Discord bot with 105+ slash commands for moderation, RPG, casino
 - **Classic:** `/fun coinflip`, `dice`, `8ball`, `rps`, `joke`, `meme`, `trivia`, `roll`, `ship`, `summon`
 
 ### 🎲 Games (14 commands)
-- `/games 2048` - Sliding tile puzzle with Unicode board
-- `/games tictactoe` - Multiplayer tic-tac-toe
-- `/games connect4` - Connect Four with emoji board
-- `/games wordle` - 6-guess word game
-- `/games maze` - Navigate interactive mazes
-- `/games highlow` - Card guessing game
+- `/games 2048` — Sliding tile puzzle with Unicode board
+- `/games tictactoe` — Multiplayer tic-tac-toe
+- `/games connect4` — Connect Four with emoji board
+- `/games wordle` — 6-guess word game
+- `/games maze` — Navigate interactive mazes
+- `/games highlow` — Card guessing game
 - `/games war`, `snap`, `go-fish`, `tag`
 
 ### 🎰 Casino (5 commands)
-- `/casino blackjack` - Classic 21 with compact card display
-- `/casino poker` - 5-card video poker
-- `/casino slots` - Weighted slot machine
-- `/casino roulette` - European roulette
-- `/casino russian-roulette` - Risk/reward game
+- `/casino blackjack` — Classic 21 with compact card display
+- `/casino poker` — 5-card video poker
+- `/casino slots` — Weighted slot machine
+- `/casino roulette` — European roulette
+- `/casino russian-roulette` — Risk/reward game
 
 ### 💰 Economy (16 commands)
 - `/economy balance`, `shop`, `inventory`, `trade`
-- `/economy daily` - Daily rewards with streaks
+- `/economy daily` — Daily rewards with streaks
 - `/economy rob`, `gift`, `leaderboard`, `work`, `lottery`
-- `/economy admin` - Admin tools (grant, take, transactions)
+- `/economy admin` — Admin tools (grant, take, transactions)
 
 ### 🛡️ Moderation (23 commands)
 - `/mod kick`, `ban`, `unban`, `timeout`, `warn`, `warnings`
 - `/mod purge`, `lock`, `unlock`, `slowmode`
-- `/mod automod` - Auto-moderation setup
+- `/mod automod` — Auto-moderation setup
 - `/mod softban`, `massban`, `history`, `case`, `reason`
 - `/mod report`, `reports`, `modnote`, `modlog`
 
@@ -50,7 +60,7 @@ A comprehensive Discord bot with 105+ slash commands for moderation, RPG, casino
 - `/music queue`, `nowplaying`, `volume`, `shuffle`, `loop`
 
 ### ⭐ Leveling (8 commands)
-- `/level` - View your level card with XP bar
+- `/level` — View your level card with XP bar
 - `/level leaderboard`, `rewards`
 - Admin: `set-rewards`, `set-channel`, `toggle`, `reset`, `set-multiplier`
 
@@ -58,14 +68,12 @@ A comprehensive Discord bot with 105+ slash commands for moderation, RPG, casino
 - `/welcome setup`, `set-leave`, `set-role`
 - `/welcome toggle`, `test`, `set-image`
 
-# Note: Do not publish Discorbo as your app, just invite the current one to your server [Discorbo](https://discord.com/oauth2/authorize?client_id=1472679226330059023&permissions=277025770560&scope=bot%20applications.commands)
+---
 
 ## Prerequisites
-(I don't recommend this unless you want to copy my work..., just head to [my website](
 
-- Node.js v16.9.0 or higher
-- A Discord bot token ([Create one here](https://discord.com/developers/applications))
-- npm or yarn package manager
+- **Go 1.21+** ([Download](https://go.dev/dl/))
+- A Discord bot token ([Create one](https://discord.com/developers/applications))
 
 ## Installation
 
@@ -75,12 +83,7 @@ A comprehensive Discord bot with 105+ slash commands for moderation, RPG, casino
    cd Discorbo
    ```
 
-2. **Install dependencies**
-   ```bash
-   npm install
-   ```
-
-3. **Configure environment variables**
+2. **Configure environment variables**
    - Copy `.env.example` to `.env`
    - Fill in your bot credentials:
    ```env
@@ -90,7 +93,7 @@ A comprehensive Discord bot with 105+ slash commands for moderation, RPG, casino
    OWNER_ID=your_discord_user_id_here  # Optional
    ```
 
-4. **Get your Discord Bot Token**
+3. **Get your Discord Bot Token**
    - Go to [Discord Developer Portal](https://discord.com/developers/applications)
    - Create a new application or select existing
    - Go to "Bot" section and click "Add Bot"
@@ -99,144 +102,102 @@ A comprehensive Discord bot with 105+ slash commands for moderation, RPG, casino
      - Server Members Intent
      - Message Content Intent
 
-5. **Invite the bot to your server**
+4. **Invite the bot to your server**
    - In Developer Portal, go to "OAuth2" → "URL Generator"
    - Select scopes: `bot`, `applications.commands`
-   - Select permissions: At minimum, these permissions:
-     - Send Messages
-     - Embed Links
-     - Add Reactions
-     - Read Message History
-     - Use Slash Commands
-   - Copy the generated URL and open it in browser
-   - Select your server and authorize
+   - Select permissions: Send Messages, Embed Links, Add Reactions, Read Message History, Use Slash Commands
+   - Copy the generated URL, open it in browser, and authorize
 
-## Usage
+## Build & Run
 
-1. **Deploy slash commands to Discord**
-   ```bash
-   npm run deploy
-   ```
-   This registers your commands with Discord. Run this whenever you add or modify commands.
+```bash
+# Build the bot
+cd go && go build -o discorbo.exe
 
-2. **Start the bot**
-   ```bash
-   npm start
-   ```
+# Run the bot (auto-registers slash commands on startup)
+.\discorbo.exe
+```
 
-3. **Development mode** (auto-restart on file changes)
-   ```bash
-   npm run dev
-   ```
+Or using npm scripts from the project root:
+```bash
+npm run build   # Builds go/discorbo.exe
+npm start       # Runs go/discorbo.exe
+```
+
+Slash commands are **automatically registered** when the bot starts — no separate deploy step needed.
 
 ## Project Structure
 
 ```
 Discorbo/
-├── src/
-│   ├── index.js              # Bot entry point
-│   ├── config.js             # Configuration
-│   ├── deploy-commands.js    # Command registration
-│   │
-│   ├── commands/             # Slash commands
-│   │   ├── fun/              # Fun & game commands
-│   │   └── utility/          # Utility commands
-│   │
-│   ├── events/               # Event handlers
-│   │   ├── ready.js          # Bot startup
-│   │   ├── interactionCreate.js  # Command handler
-│   │   └── messageCreate.js  # AFK system
-│   │
-│   ├── utils/                # Utilities
-│   │   ├── logger.js         # Logging
-│   │   ├── embedBuilder.js   # Embed helpers
-│   │   ├── errorHandler.js   # Error management
-│   │   ├── cooldownManager.js # Anti-spam
-│   │   ├── dataManager.js    # JSON storage
-│   │   └── reminderChecker.js # Reminder system
-│   │
-│   └── data/                 # JSON data files
-│       ├── trivia-scores.json
-│       ├── reminders.json
-│       ├── afk-users.json
-│       └── command-usage.json
+├── go/                         # Go source (runtime)
+│   ├── main.go                 # Entry point, command routing, graceful shutdown
+│   ├── types.go                # All struct definitions, allCommands()
+│   ├── handlers.go             # Button/component interactions, messageCreate
+│   ├── helpers.go              # Embed builders, math parser, visual helpers
+│   ├── rendering.go            # Unicode card/board rendering
+│   ├── data.go                 # Thread-safe JSON I/O with in-memory cache
+│   ├── cmd_fun.go              # Core fun commands (~20)
+│   ├── cmd_fun_new.go          # Creative/social/party commands (10)
+│   ├── cmd_fun_games.go        # Tag, boss raids, quest, loot
+│   ├── cmd_games_puzzle.go     # 2048, high-low, tictactoe, connect4, wordle
+│   ├── cmd_games_casino.go     # Blackjack, slots, roulette, war
+│   ├── cmd_games_cards.go      # Poker, go-fish, snap
+│   ├── cmd_economy.go          # Economy (16 commands)
+│   ├── cmd_moderation.go       # Moderation (23 commands)
+│   ├── cmd_utility.go          # Utility (23 commands)
+│   ├── cmd_leveling.go         # Leveling/XP system (8 commands)
+│   ├── cmd_welcome.go          # Welcome/leave system (6 commands)
+│   ├── cmd_music.go            # Music queue management (10 commands)
+│   ├── cmd_maze.go             # Maze generation and navigation
+│   ├── go.mod / go.sum         # Go module dependencies
+│   └── build.ps1 / run.ps1    # Build and run scripts
 │
-├── .env                      # Environment config (gitignored)
-├── .env.example              # Environment template
-├── package.json              # Dependencies
-└── README.md                 # This file
+├── src/data/                   # JSON data files (created automatically)
+│   ├── economy-users.json      # All player balances, inventories, streaks
+│   ├── trivia-scores.json      # Trivia scores
+│   ├── reminders.json          # Active reminders
+│   ├── afk-users.json          # AFK statuses
+│   ├── command-usage.json      # Usage statistics
+│   └── ...                     # Guild configs, mod actions, etc.
+│
+├── .env                        # Environment config (gitignored)
+├── .env.example                # Environment template
+├── package.json                # npm scripts for build/start
+└── README.md                   # This file
 ```
 
 ## Data Persistence
 
-The bot uses JSON files for data storage:
-- **trivia-scores.json** - Trivia game scores and statistics
-- **reminders.json** - Active user reminders
-- **afk-users.json** - AFK status for users
-- **command-usage.json** - Command usage statistics
+The bot uses JSON files with an **in-memory cache** and automatic 30-second flush for performance. Data files are stored in `src/data/` and created automatically when needed.
 
-These files are created automatically in `src/data/` when needed.
+Key data files:
+- **economy-users.json** — All player balances, inventories, daily streaks, boosts
+- **trivia-scores.json** — Trivia scores and statistics
+- **reminders.json** — Active user reminders
+- **afk-users.json** — AFK status for users
+- **guild-config.json** — Per-server settings
+- **mod-actions.json** — Moderation action log
 
 ## Troubleshooting
 
 ### Bot doesn't come online
 - Verify your `DISCORD_TOKEN` is correct in `.env`
 - Check that required intents are enabled in Discord Developer Portal
-- Ensure Node.js version is 16.9.0 or higher
+- Ensure Go 1.21+ is installed (`go version`)
 
 ### Commands don't appear
-- Run `npm run deploy` to register commands
-- If using `GUILD_ID`, commands update instantly (recommended for development)
-- Without `GUILD_ID`, global commands can take up to 1 hour to update
-
-### Reminders not working
-- Check that the bot has permission to DM users
-- Verify the bot is online (reminder checker runs every 30 seconds)
+- Commands register automatically on startup
+- If using `GUILD_ID`, commands update instantly
+- Without `GUILD_ID`, global commands can take up to 1 hour to propagate
 
 ### API commands failing (joke, meme, trivia, translate)
 - Check your internet connection
 - Some APIs may have rate limits or be temporarily down
-- The bot will display user-friendly error messages
-
-## Configuration
-
-Edit `src/config.js` to customize:
-- Bot presence/status
-- Default cooldowns
-- API endpoints
-- Feature flags
-- Limits (poll options, reminders, etc.)
-
-## Adding New Commands
-
-1. Create a new file in `src/commands/fun/` or `src/commands/utility/`
-2. Use this template:
-
-```javascript
-const { SlashCommandBuilder } = require('discord.js');
-const { infoEmbed } = require('../../utils/embedBuilder');
-
-module.exports = {
-  data: new SlashCommandBuilder()
-    .setName('commandname')
-    .setDescription('Command description'),
-
-  category: 'fun', // or 'utility'
-  cooldown: 5, // seconds
-
-  async execute(interaction) {
-    const embed = infoEmbed('Title', 'Description');
-    await interaction.reply({ embeds: [embed] });
-  }
-};
-```
-
-3. Run `npm run deploy` to register the command
-4. Restart the bot
+- The bot displays user-friendly error embeds
 
 ## Contributing
 
-Contributions are welcome! Please:
 1. Fork the repository
 2. Create a feature branch
 3. Make your changes
@@ -245,24 +206,15 @@ Contributions are welcome! Please:
 
 ## License
 
-MIT License - feel free to use this bot for your own projects!
-
-## Support
-
-If you encounter issues:
-1. Check the [Troubleshooting](#troubleshooting) section
-2. Review bot console logs for error messages
-3. Ensure all prerequisites are met
-4. Check Discord API status at https://discordstatus.com
+MIT License — feel free to use this bot for your own projects!
 
 ## Acknowledgments
 
-- Built with [discord.js](https://discord.js.org/)
+- Built with [discordgo](https://github.com/bwmarrin/discordgo)
 - Jokes from [JokeAPI](https://jokeapi.dev/)
 - Memes from Reddit
 - Trivia from [Open Trivia DB](https://opentdb.com/)
-- Translation from [LibreTranslate](https://libretranslate.com/)
 
 ---
 
-Made with ❤️ using discord.js
+Made with ❤️ in Go
