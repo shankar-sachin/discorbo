@@ -40,5 +40,6 @@ go/mazebot/.gocache/
 src/.bot.lock
 
 CLAUDE.md
+copilot-instructions.md
 SETUP_INSTRUCTIONS.txt
 CLAUDE_GO.md
