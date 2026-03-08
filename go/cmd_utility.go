@@ -122,6 +122,7 @@ func handleHelp(s *discordgo.Session, i *discordgo.InteractionCreate, opts []*di
 		Description: fmt.Sprintf("**%d subcommands** across 7 groups. Use `/group subcommand`.", total),
 		Color:       ColorBlue,
 		Timestamp:   time.Now().Format(time.RFC3339),
+		Footer:      &discordgo.MessageEmbedFooter{Text: "Discorbo"},
 	}
 
 	for _, g := range allGroups {
@@ -171,14 +172,15 @@ func handleUserInfo(s *discordgo.Session, i *discordgo.InteractionCreate, opts [
 		u = picked
 	}
 	embed := &discordgo.MessageEmbed{
-		Title: fmt.Sprintf("User Information: %s", u.String()),
-		Color: 0x5865F2,
+		Title: fmt.Sprintf("👤 %s", u.Username),
+		Color: ColorBlue,
 		Fields: []*discordgo.MessageEmbedField{
 			{Name: "Username", Value: u.Username, Inline: true},
 			{Name: "User ID", Value: u.ID, Inline: true},
 			{Name: "Bot Account", Value: strconv.FormatBool(u.Bot), Inline: true},
 			{Name: "Created", Value: fmt.Sprintf("<t:%d:R>", snowflakeUnix(u.ID)), Inline: true},
 		},
+		Footer: &discordgo.MessageEmbedFooter{Text: "Discorbo"},
 	}
 	if avatar := u.AvatarURL("1024"); avatar != "" {
 		embed.Thumbnail = &discordgo.MessageEmbedThumbnail{URL: avatar}

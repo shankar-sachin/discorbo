@@ -1,10 +1,8 @@
 package main
 
 import (
-	"encoding/json"
 	"fmt"
 	"math/rand"
-	"net/url"
 	"strconv"
 	"strings"
 	"time"
@@ -119,106 +117,22 @@ func update2048HighScore(userID string, score int) int {
 	return scores[userID]
 }
 
-// generate2048ImageURL builds a QuickChart matrix chart with official 2048 tile colors.
-func generate2048ImageURL(grid [4][4]int) string {
-	tileColor := func(v int) string {
-		switch v {
-		case 2:
-			return "#eee4da"
-		case 4:
-			return "#ede0c8"
-		case 8:
-			return "#f2b179"
-		case 16:
-			return "#f59563"
-		case 32:
-			return "#f67c5f"
-		case 64:
-			return "#f65e3b"
-		case 128:
-			return "#edcf72"
-		case 256:
-			return "#edcc61"
-		case 512:
-			return "#edc850"
-		case 1024:
-			return "#edc53f"
-		case 2048:
-			return "#edc22e"
-		default:
-			if v > 2048 {
-				return "#3c3a32"
-			}
-			return "#cdc1b4" // empty cell
-		}
-	}
-
-	type dp struct {
-		X float64 `json:"x"`
-		Y float64 `json:"y"`
-		V string  `json:"v"`
-	}
-
-	var points []dp
-	var bgColors []string
-	var textColors []string
-
+// build2048Grid renders the 4×4 grid as a monospace code block for Discord.
+func build2048Grid(grid [4][4]int) string {
+	var rows []string
 	for r := 0; r < 4; r++ {
+		var cells []string
 		for c := 0; c < 4; c++ {
 			v := grid[r][c]
-			vStr := ""
-			if v != 0 {
-				vStr = strconv.Itoa(v)
-			}
-			// y is inverted: row 0 = top (y=3.5), row 3 = bottom (y=0.5)
-			points = append(points, dp{X: float64(c) + 0.5, Y: float64(3-r) + 0.5, V: vStr})
-			bgColors = append(bgColors, tileColor(v))
-			if v <= 4 {
-				textColors = append(textColors, "#776e65")
+			if v == 0 {
+				cells = append(cells, "   ·")
 			} else {
-				textColors = append(textColors, "#f9f6f2")
+				cells = append(cells, fmt.Sprintf("%4s", strconv.Itoa(v)))
 			}
 		}
+		rows = append(rows, strings.Join(cells, "  "))
 	}
-
-	cfg := map[string]interface{}{
-		"type": "matrix",
-		"data": map[string]interface{}{
-			"datasets": []map[string]interface{}{{
-				"data":            points,
-				"backgroundColor": bgColors,
-				"borderColor":     "#bbada0",
-				"borderWidth":     4,
-				"width":           "(ctx) => ctx.chart.chartArea ? ctx.chart.chartArea.width / 4 - 4 : 90",
-				"height":          "(ctx) => ctx.chart.chartArea ? ctx.chart.chartArea.height / 4 - 4 : 90",
-			}},
-		},
-		"options": map[string]interface{}{
-			"animation": false,
-			"plugins": map[string]interface{}{
-				"legend": map[string]interface{}{"display": false},
-				"datalabels": map[string]interface{}{
-					"display":   true,
-					"formatter": "(value) => value.v",
-					"color":     textColors,
-					"font": map[string]interface{}{
-						"size":   22,
-						"weight": "bold",
-					},
-				},
-			},
-			"scales": map[string]interface{}{
-				"x": map[string]interface{}{"display": false, "min": 0, "max": 4},
-				"y": map[string]interface{}{"display": false, "min": 0, "max": 4},
-			},
-		},
-	}
-
-	b, err := json.Marshal(cfg)
-	if err != nil {
-		return ""
-	}
-	return "https://quickchart.io/chart?w=400&h=400&bkg=%23bbada0&c=" + url.QueryEscape(string(b))
+	return "```\n" + strings.Join(rows, "\n") + "\n```"
 }
 
 func build2048Embed(sess *g2048Session) *discordgo.MessageEmbed {
@@ -230,25 +144,18 @@ func build2048Embed(sess *g2048Session) *discordgo.MessageEmbed {
 		{Name: "Score", Value: fmt.Sprintf("%d", sess.Score), Inline: true},
 	}
 	if highScore > 0 {
-		fields = append(fields, &discordgo.MessageEmbedField{Name: "High Score", Value: fmt.Sprintf("%d", highScore), Inline: true})
+		fields = append(fields, &discordgo.MessageEmbedField{Name: "Best", Value: fmt.Sprintf("%d", highScore), Inline: true})
 	}
 
-	imageURL := generate2048ImageURL(sess.Grid)
-	e := &discordgo.MessageEmbed{
-		Title:     "🟨 2048",
-		Color:     ColorYellow,
-		Fields:    fields,
-		Footer:    &discordgo.MessageEmbedFooter{Text: "Reach 2048 to win! | Discorbo"},
-		Timestamp: time.Now().Format(time.RFC3339),
+	return &discordgo.MessageEmbed{
+		Title:       "🟨 2048",
+		Description: build2048Grid(sess.Grid),
+		Color:       ColorYellow,
+		Fields:      fields,
+		Footer:      &discordgo.MessageEmbedFooter{Text: "Reach 2048 to win! | Discorbo"},
+		Timestamp:   time.Now().Format(time.RFC3339),
 	}
-	if imageURL != "" {
-		e.Image = &discordgo.MessageEmbedImage{URL: imageURL}
-	}
-	return e
 }
-
-// keep strings import used elsewhere in the file
-var _ = strings.Join
 
 func build2048Buttons() []discordgo.MessageComponent {
 	return []discordgo.MessageComponent{

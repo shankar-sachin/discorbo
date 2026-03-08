@@ -208,8 +208,7 @@ func handleBlackjack(s *discordgo.Session, i *discordgo.InteractionCreate, opts 
 	}()
 }
 
-// bjGalleryURL is the shared embed URL that groups card images into a Discord gallery.
-const bjGalleryURL = "https://deckofcardsapi.com/bj"
+// bjGalleryURL removed — cards are now displayed as text, not images.
 
 func buildBJEmbeds(sess *bjSession, reveal bool) []*discordgo.MessageEmbed {
 	dealerStr := sess.DealerHand[0] + " ??"
@@ -218,44 +217,18 @@ func buildBJEmbeds(sess *bjSession, reveal bool) []*discordgo.MessageEmbed {
 		dealerStr = handStr(sess.DealerHand)
 		dealerVal = fmt.Sprintf(" (%d)", handValue(sess.DealerHand))
 	}
-	main := &discordgo.MessageEmbed{
-		URL:   bjGalleryURL,
+	embed := &discordgo.MessageEmbed{
 		Title: "🃏 Blackjack",
 		Color: ColorPurple,
 		Fields: []*discordgo.MessageEmbedField{
 			{Name: fmt.Sprintf("Your Hand (%d)", handValue(sess.PlayerHand)), Value: handStr(sess.PlayerHand), Inline: true},
 			{Name: "Dealer's Hand" + dealerVal, Value: dealerStr, Inline: true},
-			{Name: "Bet", Value: fmt.Sprintf("%d coins", sess.Bet), Inline: false},
+			{Name: "💰 Bet", Value: fmt.Sprintf("%d coins", sess.Bet), Inline: false},
 		},
 		Footer:    &discordgo.MessageEmbedFooter{Text: "Discorbo"},
 		Timestamp: time.Now().Format(time.RFC3339),
 	}
-	// First player card goes on the main embed image
-	if len(sess.PlayerHand) > 0 {
-		main.Image = &discordgo.MessageEmbedImage{URL: cardImageURL(sess.PlayerHand[0])}
-	}
-	embeds := []*discordgo.MessageEmbed{main}
-	// Remaining player cards
-	for _, card := range sess.PlayerHand[1:] {
-		embeds = append(embeds, &discordgo.MessageEmbed{
-			URL:   bjGalleryURL,
-			Color: ColorPurple,
-			Image: &discordgo.MessageEmbedImage{URL: cardImageURL(card)},
-		})
-	}
-	// Dealer cards — first visible, rest hidden unless reveal
-	for idx, card := range sess.DealerHand {
-		imgURL := cardImageURL(card)
-		if !reveal && idx > 0 {
-			imgURL = cardImageURL("") // back of card
-		}
-		embeds = append(embeds, &discordgo.MessageEmbed{
-			URL:   bjGalleryURL,
-			Color: ColorGray,
-			Image: &discordgo.MessageEmbedImage{URL: imgURL},
-		})
-	}
-	return embeds
+	return []*discordgo.MessageEmbed{embed}
 }
 
 func buildBJButtons(firstTurn bool) []discordgo.MessageComponent {
@@ -413,7 +386,6 @@ func handleSlots(s *discordgo.Session, i *discordgo.InteractionCreate, opts []*d
 	}
 
 	r1, r2, r3 := weightedSlot(), weightedSlot(), weightedSlot()
-	display := fmt.Sprintf("[ %s | %s | %s ]", r1, r2, r3)
 
 	var mult float64
 	var resultText string
@@ -449,8 +421,13 @@ func handleSlots(s *discordgo.Session, i *discordgo.InteractionCreate, opts []*d
 		coinResult = fmt.Sprintf("-**%d coins**", bet)
 	}
 
-	embed := createFunEmbed("🎰 Slot Machine", fmt.Sprintf(
-		"%s\n\n%s\n%s\nBalance: **%d coins**", display, resultText, coinResult, newBal))
+	embed := createFunEmbed("🎰 Slot Machine", fmt.Sprintf("[ %s | %s | %s ]", r1, r2, r3))
+	embed.Color = 0xF1C40F
+	embed.Fields = []*discordgo.MessageEmbedField{
+		{Name: "Result", Value: resultText, Inline: false},
+		{Name: "Coins", Value: coinResult, Inline: true},
+		{Name: "Balance", Value: fmt.Sprintf("%d coins", newBal), Inline: true},
+	}
 	respondEmbed(s, i, embed)
 }
 
@@ -519,19 +496,24 @@ func handleRoulette(s *discordgo.Session, i *discordgo.InteractionCreate, opts [
 	}
 
 	var newBal int
-	var resultText string
 	if win {
 		payout := int(float64(bet) * mult)
 		newBal = modifyCoins(user.ID, user.Username, payout-bet)
-		resultText = fmt.Sprintf("🎉 **You win!** +**%d coins** (%.0fx)\nBalance: **%d coins**", payout-bet, mult, newBal)
 	} else {
 		newBal = modifyCoins(user.ID, user.Username, -bet)
-		resultText = fmt.Sprintf("😞 **You lose** **%d coins**.\nBalance: **%d coins**", bet, newBal)
 	}
 
-	embed := createFunEmbed("🎱 Roulette", fmt.Sprintf(
-		"The ball lands on **%s %d** (%s)\nYou bet on: **%s**\n\n%s",
-		spinEmoji, spin, spinColor, choice, resultText))
+	resultLabel := "😞 Lose"
+	if win {
+		resultLabel = "🎉 Win"
+	}
+	embed := createFunEmbed("🎱 Roulette", fmt.Sprintf("The ball lands on %s **%d** (%s)", spinEmoji, spin, spinColor))
+	embed.Color = 0xF1C40F
+	embed.Fields = []*discordgo.MessageEmbedField{
+		{Name: "Your Bet", Value: fmt.Sprintf("**%s**", choice), Inline: true},
+		{Name: "Result", Value: resultLabel, Inline: true},
+		{Name: "Balance", Value: fmt.Sprintf("%d coins", newBal), Inline: true},
+	}
 	respondEmbed(s, i, embed)
 }
 
@@ -574,18 +556,21 @@ func handleRussianRoulette(s *discordgo.Session, i *discordgo.InteractionCreate,
 	if survive {
 		coins := modifyCoins(user.ID, user.Username, reward)
 		text := rrSurviveTexts[rand.Intn(len(rrSurviveTexts))]
-		embed = createSuccessEmbed("🔫 Russian Roulette",
-			fmt.Sprintf("%s\n\n**+%d coins!** Balance: **%d coins**", text, reward, coins))
+		embed = createSuccessEmbed("🔫 Russian Roulette", text)
+		embed.Fields = []*discordgo.MessageEmbedField{
+			{Name: "Chambers", Value: fmt.Sprintf("%d (1 bullet)", chambers), Inline: true},
+			{Name: "Odds", Value: fmt.Sprintf("%d/%d survival", chambers-1, chambers), Inline: true},
+			{Name: "Coins", Value: fmt.Sprintf("+%d → **%d**", reward, coins), Inline: false},
+		}
 	} else {
 		coins := modifyCoins(user.ID, user.Username, -loss)
 		text := rrDeathTexts[rand.Intn(len(rrDeathTexts))]
-		embed = createErrorEmbed("🔫 Russian Roulette",
-			fmt.Sprintf("%s\n\n**-%d coins.** Balance: **%d coins**", text, loss, coins))
-	}
-
-	embed.Fields = []*discordgo.MessageEmbedField{
-		{Name: "Chambers", Value: fmt.Sprintf("%d (1 bullet)", chambers), Inline: true},
-		{Name: "Survival Odds", Value: fmt.Sprintf("%d/%d", chambers-1, chambers), Inline: true},
+		embed = createErrorEmbed("🔫 Russian Roulette", text)
+		embed.Fields = []*discordgo.MessageEmbedField{
+			{Name: "Chambers", Value: fmt.Sprintf("%d (1 bullet)", chambers), Inline: true},
+			{Name: "Odds", Value: fmt.Sprintf("%d/%d survival", chambers-1, chambers), Inline: true},
+			{Name: "Coins", Value: fmt.Sprintf("-%d → **%d**", loss, coins), Inline: false},
+		}
 	}
 	respondEmbed(s, i, embed)
 }
@@ -614,20 +599,26 @@ func handleWar(s *discordgo.Session, i *discordgo.InteractionCreate, opts []*dis
 	var embed *discordgo.MessageEmbed
 	if pv > bv {
 		newBal := modifyCoins(user.ID, user.Username, bet)
-		embed = createSuccessEmbed("⚔️ War — You Win!",
-			fmt.Sprintf("**Your card:** %s (%d)\n**Bot's card:** %s (%d)\n\n🎉 Higher card! **+%d coins**\nBalance: **%d coins**",
-				playerCard, pv, botCard, bv, bet, newBal))
+		embed = createSuccessEmbed("⚔️ War — You Win!", fmt.Sprintf("Higher card! **+%d coins**", bet))
+		embed.Fields = []*discordgo.MessageEmbedField{
+			{Name: "Your Card", Value: fmt.Sprintf("%s (value %d)", playerCard, pv), Inline: true},
+			{Name: "Bot's Card", Value: fmt.Sprintf("%s (value %d)", botCard, bv), Inline: true},
+			{Name: "Balance", Value: fmt.Sprintf("%d coins", newBal), Inline: false},
+		}
 	} else if bv > pv {
 		newBal := modifyCoins(user.ID, user.Username, -bet)
-		embed = createErrorEmbed("⚔️ War — You Lose",
-			fmt.Sprintf("**Your card:** %s (%d)\n**Bot's card:** %s (%d)\n\n😞 Lower card. **-%d coins**\nBalance: **%d coins**",
-				playerCard, pv, botCard, bv, bet, newBal))
+		embed = createErrorEmbed("⚔️ War — You Lose", fmt.Sprintf("Lower card. **-%d coins**", bet))
+		embed.Fields = []*discordgo.MessageEmbedField{
+			{Name: "Your Card", Value: fmt.Sprintf("%s (value %d)", playerCard, pv), Inline: true},
+			{Name: "Bot's Card", Value: fmt.Sprintf("%s (value %d)", botCard, bv), Inline: true},
+			{Name: "Balance", Value: fmt.Sprintf("%d coins", newBal), Inline: false},
+		}
 	} else {
-		embed = createInfoEmbed("⚔️ War — Tie!",
-			fmt.Sprintf("**Your card:** %s (%d)\n**Bot's card:** %s (%d)\n\n🤝 Tie! Bet refunded.",
-				playerCard, pv, botCard, bv))
+		embed = createInfoEmbed("⚔️ War — Tie!", "Same value — bet refunded.")
+		embed.Fields = []*discordgo.MessageEmbedField{
+			{Name: "Your Card", Value: fmt.Sprintf("%s (value %d)", playerCard, pv), Inline: true},
+			{Name: "Bot's Card", Value: fmt.Sprintf("%s (value %d)", botCard, bv), Inline: true},
+		}
 	}
-	embed.Image = &discordgo.MessageEmbedImage{URL: cardImageURL(playerCard)}
-	embed.Thumbnail = &discordgo.MessageEmbedThumbnail{URL: cardImageURL(botCard)}
 	respondEmbed(s, i, embed)
 }
