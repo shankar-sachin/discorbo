@@ -26,17 +26,33 @@ const (
 
 // Embed color constants
 const (
-	ColorPurple = 0xEB459E // Fun/primary color
-	ColorBlue   = 0x5865F2 // Info/utility
-	ColorGreen  = 0x57F287 // Success
-	ColorYellow = 0xFEE75C // Warning
-	ColorRed    = 0xED4245 // Error
-	ColorGray   = 0x99AAB5 // Neutral
+	ColorPurple  = 0xEB459E // Fun/primary color
+	ColorBlue    = 0x5865F2 // Info/utility
+	ColorGreen   = 0x57F287 // Success
+	ColorYellow  = 0xFEE75C // Warning
+	ColorRed     = 0xED4245 // Error
+	ColorGray    = 0x99AAB5 // Neutral
+	ColorCasino  = 0xFFD700 // Gold for casino
+	ColorEconomy = 0x2ECC71 // Green for economy
+	ColorMod     = 0xE74C3C // Red for moderation
+	ColorLevel   = 0x9B59B6 // Purple for leveling
+	ColorMusic   = 0x1DB954 // Spotify green for music
+	ColorWelcome = 0xFF69B4 // Pink for welcome
+	ColorBattle  = 0xFF6B35 // Orange for battles
+	ColorLoot    = 0xE1C16E // Antique gold for loot
 )
+
+const botVersion = "Discorbo v2.2"
+
+func embedFooter(category string) *discordgo.MessageEmbedFooter {
+	if category == "" {
+		return &discordgo.MessageEmbedFooter{Text: botVersion}
+	}
+	return &discordgo.MessageEmbedFooter{Text: category + "  •  " + botVersion}
+}
 
 // Discord interaction helpers
 func respondText(s *discordgo.Session, i *discordgo.InteractionCreate, text string) {
-	// Convert to info embed for consistency
 	embed := createInfoEmbed("", text)
 	_ = s.InteractionRespond(i.Interaction, &discordgo.InteractionResponse{
 		Type: discordgo.InteractionResponseChannelMessageWithSource,
@@ -51,14 +67,26 @@ func respondEmbed(s *discordgo.Session, i *discordgo.InteractionCreate, e *disco
 	})
 }
 
-// Enhanced embed creators
+func respondError(s *discordgo.Session, i *discordgo.InteractionCreate, title, desc string) {
+	respondEmbed(s, i, createErrorEmbed(title, desc))
+}
+
+func respondEphemeral(s *discordgo.Session, i *discordgo.InteractionCreate, content string) {
+	_ = s.InteractionRespond(i.Interaction, &discordgo.InteractionResponse{
+		Type: discordgo.InteractionResponseChannelMessageWithSource,
+		Data: &discordgo.InteractionResponseData{Content: content, Flags: discordgo.MessageFlagsEphemeral},
+	})
+}
+
+// ── Enhanced embed creators ─────────────────────────────────────────
+
 func createSuccessEmbed(title, description string) *discordgo.MessageEmbed {
 	return &discordgo.MessageEmbed{
 		Title:       "✅ " + title,
 		Description: description,
 		Color:       ColorGreen,
 		Timestamp:   time.Now().Format(time.RFC3339),
-		Footer:      &discordgo.MessageEmbedFooter{Text: "Discorbo"},
+		Footer:      embedFooter(""),
 	}
 }
 
@@ -67,7 +95,7 @@ func createInfoEmbed(title, description string) *discordgo.MessageEmbed {
 		Description: description,
 		Color:       ColorBlue,
 		Timestamp:   time.Now().Format(time.RFC3339),
-		Footer:      &discordgo.MessageEmbedFooter{Text: "Discorbo"},
+		Footer:      embedFooter(""),
 	}
 	if title != "" {
 		embed.Title = title
@@ -81,7 +109,7 @@ func createErrorEmbed(title, description string) *discordgo.MessageEmbed {
 		Description: description,
 		Color:       ColorRed,
 		Timestamp:   time.Now().Format(time.RFC3339),
-		Footer:      &discordgo.MessageEmbedFooter{Text: "Discorbo"},
+		Footer:      embedFooter(""),
 	}
 }
 
@@ -91,7 +119,7 @@ func createWarningEmbed(title, description string) *discordgo.MessageEmbed {
 		Description: description,
 		Color:       ColorYellow,
 		Timestamp:   time.Now().Format(time.RFC3339),
-		Footer:      &discordgo.MessageEmbedFooter{Text: "Discorbo"},
+		Footer:      embedFooter(""),
 	}
 }
 
@@ -101,7 +129,7 @@ func createFunEmbed(title, description string) *discordgo.MessageEmbed {
 		Description: description,
 		Color:       ColorPurple,
 		Timestamp:   time.Now().Format(time.RFC3339),
-		Footer:      &discordgo.MessageEmbedFooter{Text: "Discorbo"},
+		Footer:      embedFooter("🎮 Fun"),
 	}
 }
 
@@ -120,6 +148,226 @@ func createGameEmbed(title, description, thumbnailURL string) *discordgo.Message
 		e.Thumbnail = &discordgo.MessageEmbedThumbnail{URL: thumbnailURL}
 	}
 	return e
+}
+
+// Specialized embed creators with themed footers
+func createCasinoEmbed(title, description string) *discordgo.MessageEmbed {
+	return &discordgo.MessageEmbed{
+		Title:       title,
+		Description: description,
+		Color:       ColorCasino,
+		Timestamp:   time.Now().Format(time.RFC3339),
+		Footer:      embedFooter("🎰 Casino"),
+	}
+}
+
+func createEconomyEmbed(title, description string) *discordgo.MessageEmbed {
+	return &discordgo.MessageEmbed{
+		Title:       title,
+		Description: description,
+		Color:       ColorEconomy,
+		Timestamp:   time.Now().Format(time.RFC3339),
+		Footer:      embedFooter("💰 Economy"),
+	}
+}
+
+func createModEmbed(title, description string) *discordgo.MessageEmbed {
+	return &discordgo.MessageEmbed{
+		Title:       title,
+		Description: description,
+		Color:       ColorMod,
+		Timestamp:   time.Now().Format(time.RFC3339),
+		Footer:      embedFooter("🛡️ Moderation"),
+	}
+}
+
+func createLevelEmbed(title, description string) *discordgo.MessageEmbed {
+	return &discordgo.MessageEmbed{
+		Title:       title,
+		Description: description,
+		Color:       ColorLevel,
+		Timestamp:   time.Now().Format(time.RFC3339),
+		Footer:      embedFooter("⭐ Leveling"),
+	}
+}
+
+func createMusicEmbed(title, description string) *discordgo.MessageEmbed {
+	return &discordgo.MessageEmbed{
+		Title:       title,
+		Description: description,
+		Color:       ColorMusic,
+		Timestamp:   time.Now().Format(time.RFC3339),
+		Footer:      embedFooter("🎵 Music"),
+	}
+}
+
+func createWelcomeEmbed(title, description string) *discordgo.MessageEmbed {
+	return &discordgo.MessageEmbed{
+		Title:       title,
+		Description: description,
+		Color:       ColorWelcome,
+		Timestamp:   time.Now().Format(time.RFC3339),
+		Footer:      embedFooter("👋 Welcome"),
+	}
+}
+
+func createBattleEmbed(title, description string) *discordgo.MessageEmbed {
+	return &discordgo.MessageEmbed{
+		Title:       title,
+		Description: description,
+		Color:       ColorBattle,
+		Timestamp:   time.Now().Format(time.RFC3339),
+		Footer:      embedFooter("⚔️ Battle"),
+	}
+}
+
+func createLootEmbed(title, description string) *discordgo.MessageEmbed {
+	return &discordgo.MessageEmbed{
+		Title:       title,
+		Description: description,
+		Color:       ColorLoot,
+		Timestamp:   time.Now().Format(time.RFC3339),
+		Footer:      embedFooter("🎁 Loot"),
+	}
+}
+
+// richEmbed creates a fully customized embed.
+type richEmbedOpts struct {
+	Title       string
+	Description string
+	Color       int
+	Category    string
+	Fields      []*discordgo.MessageEmbedField
+	ThumbnailURL string
+	ImageURL    string
+	AuthorName  string
+	AuthorIcon  string
+}
+
+func richEmbed(opts richEmbedOpts) *discordgo.MessageEmbed {
+	e := &discordgo.MessageEmbed{
+		Title:       opts.Title,
+		Description: opts.Description,
+		Color:       opts.Color,
+		Fields:      opts.Fields,
+		Timestamp:   time.Now().Format(time.RFC3339),
+		Footer:      embedFooter(opts.Category),
+	}
+	if opts.ThumbnailURL != "" {
+		e.Thumbnail = &discordgo.MessageEmbedThumbnail{URL: opts.ThumbnailURL}
+	}
+	if opts.ImageURL != "" {
+		e.Image = &discordgo.MessageEmbedImage{URL: opts.ImageURL}
+	}
+	if opts.AuthorName != "" {
+		e.Author = &discordgo.MessageEmbedAuthor{Name: opts.AuthorName, IconURL: opts.AuthorIcon}
+	}
+	return e
+}
+
+// coinDisplay formats coins with a comma separator and emoji.
+func coinDisplay(coins int) string {
+	s := fmt.Sprintf("%d", coins)
+	if coins < 0 {
+		s = fmt.Sprintf("%d", -coins)
+	}
+	// Add thousands separators
+	n := len(s)
+	if n > 3 {
+		groups := []string{}
+		for n > 3 {
+			groups = append([]string{s[n-3 : n]}, groups...)
+			n -= 3
+		}
+		groups = append([]string{s[:n]}, groups...)
+		s = strings.Join(groups, ",")
+	}
+	if coins < 0 {
+		return fmt.Sprintf("-🪙 %s", s)
+	}
+	return fmt.Sprintf("🪙 %s", s)
+}
+
+// streakDisplay returns fire emoji scaling with streak length.
+func streakDisplay(streak int) string {
+	switch {
+	case streak >= 30:
+		return fmt.Sprintf("🔥🔥🔥 %d-day streak!", streak)
+	case streak >= 14:
+		return fmt.Sprintf("🔥🔥 %d-day streak!", streak)
+	case streak >= 7:
+		return fmt.Sprintf("🔥 %d-day streak!", streak)
+	case streak >= 1:
+		return fmt.Sprintf("🔥 %d day(s)", streak)
+	default:
+		return "No streak"
+	}
+}
+
+// ── v2.2 Visual Helpers ─────────────────────────────────────────────
+
+const dividerLine = "▬▬▬▬▬▬▬▬▬▬▬▬▬▬▬▬▬▬▬▬"
+
+func divider() string { return dividerLine }
+
+// medalPrefix returns 🥇🥈🥉 for top 3, then #N for the rest.
+func medalPrefix(idx int) string {
+	switch idx {
+	case 0:
+		return "🥇"
+	case 1:
+		return "🥈"
+	case 2:
+		return "🥉"
+	default:
+		return fmt.Sprintf("`#%d`", idx+1)
+	}
+}
+
+// ratingBar returns a star-based rating bar like ⭐⭐⭐⭐⭐☆☆☆☆☆
+func ratingBar(value, max int) string {
+	if max <= 0 {
+		max = 10
+	}
+	if value < 0 {
+		value = 0
+	}
+	if value > max {
+		value = max
+	}
+	return strings.Repeat("⭐", value) + strings.Repeat("☆", max-value)
+}
+
+// miniField creates a compact inline embed field.
+func miniField(name, value string) *discordgo.MessageEmbedField {
+	return &discordgo.MessageEmbedField{Name: name, Value: value, Inline: true}
+}
+
+// wideField creates a full-width embed field.
+func wideField(name, value string) *discordgo.MessageEmbedField {
+	return &discordgo.MessageEmbedField{Name: name, Value: value, Inline: false}
+}
+
+// createPuzzleEmbed creates an embed themed for puzzle/board games.
+func createPuzzleEmbed(title, description string) *discordgo.MessageEmbed {
+	return &discordgo.MessageEmbed{
+		Title:       title,
+		Description: description,
+		Color:       0x3498DB, // Blue for puzzles
+		Timestamp:   time.Now().Format(time.RFC3339),
+		Footer:      embedFooter("🧩 Puzzle"),
+	}
+}
+
+// createUtilityEmbed creates an embed themed for utility commands.
+func createUtilityEmbed(title, description string) *discordgo.MessageEmbed {
+	return &discordgo.MessageEmbed{
+		Title:       title,
+		Description: description,
+		Color:       ColorBlue,
+		Timestamp:   time.Now().Format(time.RFC3339),
+		Footer:      embedFooter("🛠️ Utility"),
+	}
 }
 
 func deferReply(s *discordgo.Session, i *discordgo.InteractionCreate) {
@@ -273,12 +521,14 @@ func mockCase(s string) string {
 	return string(out)
 }
 
+// Shared HTTP client for all outbound requests
+var httpClient = &http.Client{Timeout: 7 * time.Second}
+
 // HTTP helper
 func httpGet(url string) ([]byte, error) {
-	client := http.Client{Timeout: 7 * time.Second}
 	req, _ := http.NewRequest(http.MethodGet, url, nil)
-	req.Header.Set("User-Agent", "DiscorboBot/1.0")
-	resp, err := client.Do(req)
+	req.Header.Set("User-Agent", "Discorbo/2.1")
+	resp, err := httpClient.Do(req)
 	if err != nil {
 		return nil, err
 	}
@@ -627,12 +877,7 @@ func (p *mathParser) parsePower() (float64, error) {
 		if err != nil {
 			return 0, err
 		}
-		val := 1.0
-		exp := int(right)
-		for idx := 0; idx < exp; idx++ {
-			val *= left
-		}
-		left = val
+		left = math.Pow(left, right)
 	}
 	return left, nil
 }
@@ -757,6 +1002,36 @@ var wyrQuestions = [][2]string{
 	{"Live without music", "Live without movies"},
 	{"Be able to teleport", "Be able to time travel"},
 	{"Fight one horse-sized duck", "Fight 100 duck-sized horses"},
+	{"Always have to whisper", "Always have to shout"},
+	{"Have no elbows", "Have no knees"},
+	{"Eat only spicy food forever", "Eat only bland food forever"},
+	{"Know every language", "Be able to play every instrument"},
+	{"Live in a treehouse", "Live in a houseboat"},
+	{"Have a rewind button for your life", "Have a pause button for your life"},
+	{"Never use social media again", "Never watch a movie again"},
+	{"Have a personal chef", "Have a personal chauffeur"},
+	{"Be famous for the wrong reasons", "Be unknown for the right reasons"},
+	{"Always feel too hot", "Always feel too cold"},
+	{"Have unlimited battery life on all devices", "Have unlimited WiFi everywhere"},
+	{"Talk to animals", "Speak every human language"},
+	{"Be stuck in a horror movie", "Be stuck in a rom-com"},
+	{"Never eat pizza again", "Never eat ice cream again"},
+	{"Have super strength", "Have super speed"},
+	{"Live 100 years in the past", "Live 100 years in the future"},
+	{"Be able to read minds", "Be able to see the future"},
+	{"Always be 10 minutes early", "Always be 10 minutes late"},
+	{"Have a personal robot butler", "Have a magical flying carpet"},
+	{"Win the lottery once", "Live twice as long"},
+	{"Never have to sleep", "Never have to eat"},
+	{"Be the funniest person alive", "Be the smartest person alive"},
+	{"Only be able to walk on all fours", "Only be able to walk sideways"},
+	{"Have a photographic memory", "Have the ability to forget anything at will"},
+	{"Be a famous actor", "Be a famous musician"},
+	{"Control fire", "Control water"},
+	{"Have unlimited money", "Have unlimited knowledge"},
+	{"Relive the same day forever", "Fast-forward to any point in time"},
+	{"Always know when someone is lying", "Always get away with lying"},
+	{"Be immune to hangovers", "Be immune to sickness"},
 }
 
 var questTemplates = []questEntry{

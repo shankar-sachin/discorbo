@@ -314,7 +314,8 @@ func handleAPIFun(s *discordgo.Session, i *discordgo.InteractionCreate, cmd stri
 			Color:       0xEB459E,
 			URL:         "https://reddit.com" + p.Permalink,
 			Image:       &discordgo.MessageEmbedImage{URL: p.URL},
-			Footer:      &discordgo.MessageEmbedFooter{Text: "r/" + sub + " • Discorbo"},
+			Footer:      &discordgo.MessageEmbedFooter{Text: "r/" + sub + "  •  " + botVersion},
+			Timestamp:   time.Now().Format(time.RFC3339),
 		}
 		editDeferredEmbed(s, i, embed, nil)
 	case "trivia":
@@ -405,13 +406,15 @@ func handleAPIFun(s *discordgo.Session, i *discordgo.InteractionCreate, cmd stri
 			Title:       "\U0001F9E0 Trivia - " + q.Category,
 			Description: fmt.Sprintf("**%s**\n\n\U0001F3AF Difficulty: %s\n\U0001F4AF Points: %d", html.UnescapeString(q.Question), strings.ToUpper(q.Difficulty), points),
 			Color:       0xEB459E,
+			Footer:      embedFooter("🎮 Trivia"),
+			Timestamp:   time.Now().Format(time.RFC3339),
 		}
 		editDeferredEmbed(s, i, embed, rows)
 	case "trivia-leaderboard":
 		scores := map[string]triviaScore{}
 		_ = readData("trivia-scores.json", &scores)
 		if len(scores) == 0 {
-			respondText(s, i, "No scores yet. Use /trivia to start playing.")
+			respondError(s, i, "No Data", "No scores yet. Use `/fun trivia` to start playing!")
 			return
 		}
 		type row struct {
@@ -432,9 +435,10 @@ func handleAPIFun(s *discordgo.Session, i *discordgo.InteractionCreate, cmd stri
 			if r.Total > 0 {
 				acc = float64(r.Correct) * 100 / float64(r.Total)
 			}
-			lines = append(lines, fmt.Sprintf("%d. %s - %d pts (%.1f%%)", idx+1, r.Username, r.Score, acc))
+			lines = append(lines, fmt.Sprintf("%s **%s** — %d pts (%.1f%% accuracy)", medalPrefix(idx), r.Username, r.Score, acc))
 		}
-		respondText(s, i, strings.Join(lines, "\n"))
+		embed := createFunEmbed("🏆 Trivia Leaderboard", strings.Join(lines, "\n"))
+		respondEmbed(s, i, embed)
 	}
 }
 
@@ -452,8 +456,56 @@ func handleFunCmd(s *discordgo.Session, i *discordgo.InteractionCreate) {
 	case "8ball", "coinflip", "dice", "random-number", "random-choice", "rate",
 		"reverse-text", "mock-text", "flip-text", "rps", "roll":
 		handleSimpleFun(s, i, sub.Name, subOpts)
-	case "ship", "summon", "vibecheck", "would-you-rather", "hotseat":
+	case "ship", "summon":
 		handleInteractiveFun(s, i, sub.Name, subOpts)
+	// "creative" SubCommandGroup: ascii-art, countdown, emoji-mix, fake-tweet, fortune
+	case "creative":
+		if len(subOpts) == 0 {
+			return
+		}
+		innerSub := subOpts[0]
+		switch innerSub.Name {
+		case "ascii-art":
+			handleAsciiArt(s, i, innerSub.Options)
+		case "countdown":
+			handleCountdown(s, i, innerSub.Options)
+		case "emoji-mix":
+			handleEmojiMix(s, i, innerSub.Options)
+		case "fake-tweet":
+			handleFakeTweet(s, i, innerSub.Options)
+		case "fortune":
+			handleFortune(s, i)
+		}
+	// "social" SubCommandGroup: roast, compliment
+	case "social":
+		if len(subOpts) == 0 {
+			return
+		}
+		innerSub := subOpts[0]
+		switch innerSub.Name {
+		case "roast":
+			handleRoast(s, i, innerSub.Options)
+		case "compliment":
+			handleCompliment(s, i, innerSub.Options)
+		}
+	// "party" SubCommandGroup: truth-or-dare, this-or-that, would-you-rather
+	case "party":
+		if len(subOpts) == 0 {
+			return
+		}
+		innerSub := subOpts[0]
+		switch innerSub.Name {
+		case "truth-or-dare":
+			handleTruthOrDare(s, i)
+		case "this-or-that":
+			handleThisOrThat(s, i)
+		case "would-you-rather":
+			handleInteractiveFun(s, i, "would-you-rather", innerSub.Options)
+		case "hotseat":
+			handleInteractiveFun(s, i, "hotseat", innerSub.Options)
+		case "vibecheck":
+			handleInteractiveFun(s, i, "vibecheck", innerSub.Options)
+		}
 	case "joke", "meme":
 		handleAPIFun(s, i, sub.Name, subOpts)
 	// trivia is now a SubcommandGroup (play/leaderboard)

@@ -1,0 +1,11 @@
+{
+  "1153496849139904552": {
+    "enabled": true,
+    "welcomeChannelId": "1153496849584492556",
+    "welcomeMessage": "Welcome, {user}! Thank you for joining {server}. We have reached {membercount} members!",
+    "leaveChannelId": "",
+    "leaveMessage": "{username} has left the server. We now have {membercount} members.",
+    "autoRoleId": "",
+    "bannerUrl": ""
+  }
+}

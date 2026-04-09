@@ -218,6 +218,11 @@ type economyUser struct {
 	TradeHistory []tradeRecord   `json:"tradeHistory"`
 	TotalSpent   int             `json:"totalSpent"`
 	TotalEarned  int             `json:"totalEarned"`
+	// Migrated from dailyUser (v1 → v2)
+	LastClaim   int64 `json:"lastClaim,omitempty"`
+	Streak      int   `json:"streak,omitempty"`
+	TotalClaims int   `json:"totalClaims,omitempty"`
+	BossKills   int   `json:"bossKills,omitempty"`
 }
 
 type inventoryItem struct {
@@ -325,6 +330,28 @@ type modAction struct {
 	GuildID      string `json:"guildId"`
 }
 
+type modReport struct {
+	ID         string `json:"id"`
+	ReporterID string `json:"reporterId"`
+	Reporter   string `json:"reporter"`
+	TargetID   string `json:"targetId"`
+	Target     string `json:"target"`
+	Reason     string `json:"reason"`
+	Timestamp  int64  `json:"timestamp"`
+	GuildID    string `json:"guildId"`
+}
+
+type modNote struct {
+	ID          string `json:"id"`
+	UserID      string `json:"userId"`
+	Username    string `json:"username"`
+	ModeratorID string `json:"moderatorId"`
+	Moderator   string `json:"moderator"`
+	Note        string `json:"note"`
+	Timestamp   int64  `json:"timestamp"`
+	GuildID     string `json:"guildId"`
+}
+
 type guildConfig struct {
 	GuildID       string        `json:"guildId"`
 	ModLogChannel string        `json:"modLogChannel"`
@@ -415,12 +442,45 @@ type pollSession struct {
 	ExpiresAt int64
 }
 
+// Tic-Tac-Toe session
+type tttSession struct {
+	Player1ID   string
+	Player1Name string
+	Player2ID   string
+	Player2Name string
+	Board       [3][3]int // 0=empty, 1=P1(X), 2=P2(O)
+	CurrentTurn int       // 1 or 2
+	MessageID   string
+	ChannelID   string
+}
+
+// Connect4 session
+type c4Session struct {
+	Player1ID   string
+	Player1Name string
+	Player2ID   string
+	Player2Name string
+	Board       [6][7]int // 0=empty, 1=P1(red), 2=P2(yellow)
+	CurrentTurn int       // 1 or 2
+	MessageID   string
+	ChannelID   string
+}
+
+// Wordle session
+type wordleSession struct {
+	UserID    string
+	Word      string
+	Guesses   []string
+	Results   [][]int
+	MessageID string
+	ChannelID string
+}
+
 // Global state
 var (
 	botStartedAt   = time.Now()
 	sessionMu      sync.Mutex
 	sessions       = map[string]*mazeSession{}
-	dataMu         sync.Mutex
 	triviaMu       sync.Mutex
 	triviaSessions = map[string]triviaSession{}
 	tradeMu        sync.Mutex
@@ -437,6 +497,16 @@ var (
 	hlSessions     = map[string]*hlSession{}
 	pollMu         sync.Mutex
 	pollSessions   = map[string]*pollSession{}
+	tttMu          sync.Mutex
+	tttSessions    = map[string]*tttSession{}
+	c4Mu           sync.Mutex
+	c4Sessions     = map[string]*c4Session{}
+	wordleMu       sync.Mutex
+	wordleSessions = map[string]*wordleSession{}
+	robCooldowns   = map[string]int64{} // userID → unix timestamp
+	workCooldowns  = map[string]int64{} // userID → unix timestamp
+	sessionAge     = map[string]int64{} // sessionKey → unix creation timestamp
+	sessionAgeMu   sync.Mutex
 )
 
 // Command definitions — all commands are grouped into 7 top-level slash commands.
@@ -490,6 +560,13 @@ func allCommands() []*discordgo.ApplicationCommand {
 					{Type: discordgo.ApplicationCommandOptionUser, Name: "user", Description: "User to check", Required: false},
 				}},
 			}},
+			{Type: discordgo.ApplicationCommandOptionSubCommand, Name: "tictactoe", Description: "Play Tic-Tac-Toe against another user", Options: []*discordgo.ApplicationCommandOption{
+				{Type: discordgo.ApplicationCommandOptionUser, Name: "opponent", Description: "Who to challenge", Required: true},
+			}},
+			{Type: discordgo.ApplicationCommandOptionSubCommand, Name: "connect4", Description: "Play Connect Four against another user", Options: []*discordgo.ApplicationCommandOption{
+				{Type: discordgo.ApplicationCommandOptionUser, Name: "opponent", Description: "Who to challenge", Required: true},
+			}},
+			{Type: discordgo.ApplicationCommandOptionSubCommand, Name: "wordle", Description: "Play a Wordle word-guessing game"},
 		}},
 		// ── /casino ───────────────────────────────────────────────────────
 		{Name: "casino", Description: "Casino and gambling games", Options: []*discordgo.ApplicationCommandOption{
@@ -525,6 +602,24 @@ func allCommands() []*discordgo.ApplicationCommand {
 				{Type: discordgo.ApplicationCommandOptionSubCommand, Name: "leaderboard", Description: "View raid damage leaderboard"},
 			}},
 			{Type: discordgo.ApplicationCommandOptionSubCommand, Name: "coinflip", Description: "Flip a coin"},
+			{Type: discordgo.ApplicationCommandOptionSubCommandGroup, Name: "creative", Description: "Creative and text fun commands", Options: []*discordgo.ApplicationCommandOption{
+				{Type: discordgo.ApplicationCommandOptionSubCommand, Name: "ascii-art", Description: "Convert text to ASCII block art", Options: []*discordgo.ApplicationCommandOption{
+					{Type: discordgo.ApplicationCommandOptionString, Name: "text", Description: "Text to convert (max 10 chars, A-Z 0-9)", Required: true},
+				}},
+				{Type: discordgo.ApplicationCommandOptionSubCommand, Name: "countdown", Description: "Countdown to a date", Options: []*discordgo.ApplicationCommandOption{
+					{Type: discordgo.ApplicationCommandOptionString, Name: "event", Description: "Event name", Required: true},
+					{Type: discordgo.ApplicationCommandOptionString, Name: "date", Description: "Target date (YYYY-MM-DD)", Required: true},
+				}},
+				{Type: discordgo.ApplicationCommandOptionSubCommand, Name: "emoji-mix", Description: "Combine two emojis humorously", Options: []*discordgo.ApplicationCommandOption{
+					{Type: discordgo.ApplicationCommandOptionString, Name: "emoji1", Description: "First emoji", Required: true},
+					{Type: discordgo.ApplicationCommandOptionString, Name: "emoji2", Description: "Second emoji", Required: true},
+				}},
+				{Type: discordgo.ApplicationCommandOptionSubCommand, Name: "fake-tweet", Description: "Generate a fake tweet card", Options: []*discordgo.ApplicationCommandOption{
+					{Type: discordgo.ApplicationCommandOptionUser, Name: "user", Description: "Who posted the tweet", Required: true},
+					{Type: discordgo.ApplicationCommandOptionString, Name: "text", Description: "Tweet content", Required: true},
+				}},
+				{Type: discordgo.ApplicationCommandOptionSubCommand, Name: "fortune", Description: "Get a random fortune cookie message"},
+			}},
 			{Type: discordgo.ApplicationCommandOptionSubCommandGroup, Name: "daily", Description: "Daily rewards system", Options: []*discordgo.ApplicationCommandOption{
 				{Type: discordgo.ApplicationCommandOptionSubCommand, Name: "claim", Description: "Claim your daily reward"},
 				{Type: discordgo.ApplicationCommandOptionSubCommand, Name: "stats", Description: "View your reward stats"},
@@ -537,7 +632,6 @@ func allCommands() []*discordgo.ApplicationCommand {
 			{Type: discordgo.ApplicationCommandOptionSubCommand, Name: "flip-text", Description: "Flip text upside down", Options: []*discordgo.ApplicationCommandOption{
 				{Type: discordgo.ApplicationCommandOptionString, Name: "text", Description: "Text to flip", Required: true},
 			}},
-			{Type: discordgo.ApplicationCommandOptionSubCommand, Name: "hotseat", Description: "Put a random server member in the hotseat"},
 			{Type: discordgo.ApplicationCommandOptionSubCommand, Name: "joke", Description: "Get a random joke", Options: []*discordgo.ApplicationCommandOption{
 				{Type: discordgo.ApplicationCommandOptionString, Name: "category", Description: "Joke category", Required: false, Choices: []*discordgo.ApplicationCommandOptionChoice{
 					{Name: "Any", Value: "Any"}, {Name: "Programming", Value: "Programming"}, {Name: "Miscellaneous", Value: "Misc"},
@@ -552,6 +646,15 @@ func allCommands() []*discordgo.ApplicationCommand {
 			{Type: discordgo.ApplicationCommandOptionSubCommand, Name: "meme", Description: "Get a random meme from Reddit"},
 			{Type: discordgo.ApplicationCommandOptionSubCommand, Name: "mock-text", Description: "CoNvErT tExT tO aLtErNaTiNg CaPs", Options: []*discordgo.ApplicationCommandOption{
 				{Type: discordgo.ApplicationCommandOptionString, Name: "text", Description: "Text", Required: true},
+			}},
+			{Type: discordgo.ApplicationCommandOptionSubCommandGroup, Name: "party", Description: "Party games and social prompts", Options: []*discordgo.ApplicationCommandOption{
+				{Type: discordgo.ApplicationCommandOptionSubCommand, Name: "hotseat", Description: "Put a random server member in the hotseat"},
+				{Type: discordgo.ApplicationCommandOptionSubCommand, Name: "this-or-that", Description: "Quick preference poll — pick one!"},
+				{Type: discordgo.ApplicationCommandOptionSubCommand, Name: "truth-or-dare", Description: "Get a random truth or dare prompt"},
+				{Type: discordgo.ApplicationCommandOptionSubCommand, Name: "vibecheck", Description: "Check your current vibe rating", Options: []*discordgo.ApplicationCommandOption{
+					{Type: discordgo.ApplicationCommandOptionUser, Name: "user", Description: "Check someone else's vibe", Required: false},
+				}},
+				{Type: discordgo.ApplicationCommandOptionSubCommand, Name: "would-you-rather", Description: "Get a would you rather question"},
 			}},
 			{Type: discordgo.ApplicationCommandOptionSubCommandGroup, Name: "quest", Description: "Complete quests for XP!", Options: []*discordgo.ApplicationCommandOption{
 				{Type: discordgo.ApplicationCommandOptionSubCommand, Name: "get", Description: "Get a new quest"},
@@ -595,6 +698,14 @@ func allCommands() []*discordgo.ApplicationCommand {
 				{Type: discordgo.ApplicationCommandOptionUser, Name: "user1", Description: "First user", Required: true},
 				{Type: discordgo.ApplicationCommandOptionUser, Name: "user2", Description: "Second user", Required: true},
 			}},
+			{Type: discordgo.ApplicationCommandOptionSubCommandGroup, Name: "social", Description: "Social fun commands", Options: []*discordgo.ApplicationCommandOption{
+				{Type: discordgo.ApplicationCommandOptionSubCommand, Name: "compliment", Description: "Give someone a nice compliment", Options: []*discordgo.ApplicationCommandOption{
+					{Type: discordgo.ApplicationCommandOptionUser, Name: "user", Description: "Who to compliment", Required: true},
+				}},
+				{Type: discordgo.ApplicationCommandOptionSubCommand, Name: "roast", Description: "Funny roast generator", Options: []*discordgo.ApplicationCommandOption{
+					{Type: discordgo.ApplicationCommandOptionUser, Name: "user", Description: "Who to roast", Required: true},
+				}},
+			}},
 			{Type: discordgo.ApplicationCommandOptionSubCommand, Name: "summon", Description: "Dramatically summon someone", Options: []*discordgo.ApplicationCommandOption{
 				{Type: discordgo.ApplicationCommandOptionUser, Name: "user", Description: "The person to summon", Required: true},
 				{Type: discordgo.ApplicationCommandOptionString, Name: "reason", Description: "Why are you summoning them?", Required: false},
@@ -612,10 +723,6 @@ func allCommands() []*discordgo.ApplicationCommand {
 				}},
 				{Type: discordgo.ApplicationCommandOptionSubCommand, Name: "leaderboard", Description: "View the trivia leaderboard"},
 			}},
-			{Type: discordgo.ApplicationCommandOptionSubCommand, Name: "vibecheck", Description: "Check your current vibe rating", Options: []*discordgo.ApplicationCommandOption{
-				{Type: discordgo.ApplicationCommandOptionUser, Name: "user", Description: "Check someone else's vibe", Required: false},
-			}},
-			{Type: discordgo.ApplicationCommandOptionSubCommand, Name: "would-you-rather", Description: "Get a would you rather question"},
 		}},
 		// ── /math ─────────────────────────────────────────────────────────
 		{Name: "math", Description: "Math and unit conversion tools", Options: []*discordgo.ApplicationCommandOption{
@@ -643,6 +750,26 @@ func allCommands() []*discordgo.ApplicationCommand {
 				{Type: discordgo.ApplicationCommandOptionSubCommand, Name: "clear-my-data", Description: "Remove all your data from the bot", Options: []*discordgo.ApplicationCommandOption{
 					{Type: discordgo.ApplicationCommandOptionBoolean, Name: "confirm", Description: "Confirm deletion", Required: true},
 				}},
+				{Type: discordgo.ApplicationCommandOptionSubCommand, Name: "color", Description: "Preview a hex color with RGB values", Options: []*discordgo.ApplicationCommandOption{
+					{Type: discordgo.ApplicationCommandOptionString, Name: "hex", Description: "Hex color code (e.g. FF5733 or #FF5733)", Required: true},
+				}},
+				{Type: discordgo.ApplicationCommandOptionSubCommand, Name: "define", Description: "Look up a word in the dictionary", Options: []*discordgo.ApplicationCommandOption{
+					{Type: discordgo.ApplicationCommandOptionString, Name: "word", Description: "Word to define", Required: true},
+				}},
+				{Type: discordgo.ApplicationCommandOptionSubCommand, Name: "embed-builder", Description: "Create a custom embed", Options: []*discordgo.ApplicationCommandOption{
+					{Type: discordgo.ApplicationCommandOptionString, Name: "title", Description: "Embed title", Required: true},
+					{Type: discordgo.ApplicationCommandOptionString, Name: "description", Description: "Embed description", Required: true},
+					{Type: discordgo.ApplicationCommandOptionString, Name: "color", Description: "Hex color (default: 5865F2)", Required: false},
+					{Type: discordgo.ApplicationCommandOptionString, Name: "footer", Description: "Footer text", Required: false},
+				}},
+				{Type: discordgo.ApplicationCommandOptionSubCommand, Name: "github", Description: "Show GitHub repo info", Options: []*discordgo.ApplicationCommandOption{
+					{Type: discordgo.ApplicationCommandOptionString, Name: "repo", Description: "Repository in owner/repo format", Required: true},
+				}},
+				{Type: discordgo.ApplicationCommandOptionSubCommand, Name: "giveaway", Description: "Create a giveaway with reactions", Options: []*discordgo.ApplicationCommandOption{
+					{Type: discordgo.ApplicationCommandOptionString, Name: "prize", Description: "Prize to give away", Required: true},
+					{Type: discordgo.ApplicationCommandOptionInteger, Name: "duration", Description: "Duration in minutes (1-1440)", Required: true},
+					{Type: discordgo.ApplicationCommandOptionInteger, Name: "winners", Description: "Number of winners (default: 1)", Required: false},
+				}},
 				{Type: discordgo.ApplicationCommandOptionSubCommand, Name: "help", Description: "Display all available commands", Options: []*discordgo.ApplicationCommandOption{
 					{Type: discordgo.ApplicationCommandOptionString, Name: "category", Description: "Filter category", Required: false, Choices: []*discordgo.ApplicationCommandOptionChoice{
 						{Name: "Games", Value: "games"}, {Name: "Casino", Value: "casino"}, {Name: "Fun", Value: "fun"},
@@ -667,7 +794,11 @@ func allCommands() []*discordgo.ApplicationCommand {
 					{Type: discordgo.ApplicationCommandOptionRole, Name: "role", Description: "Role", Required: true},
 				}},
 				{Type: discordgo.ApplicationCommandOptionSubCommand, Name: "serverinfo", Description: "Display information about this server"},
+				{Type: discordgo.ApplicationCommandOptionSubCommand, Name: "snipe", Description: "Recover the last deleted message in this channel"},
 				{Type: discordgo.ApplicationCommandOptionSubCommand, Name: "stats", Description: "Display bot statistics and metrics"},
+				{Type: discordgo.ApplicationCommandOptionSubCommand, Name: "sticky", Description: "Create a sticky message embed", Options: []*discordgo.ApplicationCommandOption{
+					{Type: discordgo.ApplicationCommandOptionString, Name: "message", Description: "Message to pin as sticky", Required: true},
+				}},
 				{Type: discordgo.ApplicationCommandOptionSubCommand, Name: "timer", Description: "Set a countdown timer", Options: []*discordgo.ApplicationCommandOption{
 					{Type: discordgo.ApplicationCommandOptionInteger, Name: "seconds", Description: "Duration in seconds (max 300)", Required: true},
 				}},
@@ -675,6 +806,9 @@ func allCommands() []*discordgo.ApplicationCommand {
 					{Type: discordgo.ApplicationCommandOptionString, Name: "text", Description: "Text to translate", Required: true},
 					{Type: discordgo.ApplicationCommandOptionString, Name: "to", Description: "Target language code (es, fr, de, ...)", Required: true},
 					{Type: discordgo.ApplicationCommandOptionString, Name: "from", Description: "Source language (default auto)", Required: false},
+				}},
+				{Type: discordgo.ApplicationCommandOptionSubCommand, Name: "weather", Description: "Look up current weather for a city", Options: []*discordgo.ApplicationCommandOption{
+					{Type: discordgo.ApplicationCommandOptionString, Name: "city", Description: "City name", Required: true},
 				}},
 				{Type: discordgo.ApplicationCommandOptionSubCommand, Name: "userinfo", Description: "Display detailed information about a user", Options: []*discordgo.ApplicationCommandOption{
 					{Type: discordgo.ApplicationCommandOptionUser, Name: "user", Description: "User", Required: false},
@@ -685,6 +819,18 @@ func allCommands() []*discordgo.ApplicationCommand {
 		// ── /economy ──────────────────────────────────────────────────────
 		{Name: "economy", Description: "Economy, shop, and trading system", Options: []*discordgo.ApplicationCommandOption{
 			{Type: discordgo.ApplicationCommandOptionSubCommand, Name: "balance", Description: "View your coin balance and stats"},
+			{Type: discordgo.ApplicationCommandOptionSubCommand, Name: "rob", Description: "Attempt to steal coins from another user", Options: []*discordgo.ApplicationCommandOption{
+				{Type: discordgo.ApplicationCommandOptionUser, Name: "user", Description: "User to rob", Required: true},
+			}},
+			{Type: discordgo.ApplicationCommandOptionSubCommand, Name: "gift", Description: "Gift coins to another user", Options: []*discordgo.ApplicationCommandOption{
+				{Type: discordgo.ApplicationCommandOptionUser, Name: "user", Description: "User to gift coins to", Required: true},
+				{Type: discordgo.ApplicationCommandOptionInteger, Name: "amount", Description: "Amount of coins to gift", Required: true, MinValue: minv(1)},
+			}},
+			{Type: discordgo.ApplicationCommandOptionSubCommand, Name: "leaderboard", Description: "View the top 10 richest users"},
+			{Type: discordgo.ApplicationCommandOptionSubCommand, Name: "work", Description: "Work a job to earn coins (30 min cooldown)"},
+			{Type: discordgo.ApplicationCommandOptionSubCommand, Name: "lottery", Description: "Buy lottery tickets for a chance to win big", Options: []*discordgo.ApplicationCommandOption{
+				{Type: discordgo.ApplicationCommandOptionInteger, Name: "tickets", Description: "Number of tickets to buy (1-10, 10 coins each)", Required: true, MinValue: minv(1), MaxValue: 10},
+			}},
 			{Type: discordgo.ApplicationCommandOptionSubCommandGroup, Name: "shop", Description: "Browse and buy items from the shop", Options: []*discordgo.ApplicationCommandOption{
 				{Type: discordgo.ApplicationCommandOptionSubCommand, Name: "list", Description: "Browse shop items", Options: []*discordgo.ApplicationCommandOption{
 					{Type: discordgo.ApplicationCommandOptionString, Name: "category", Description: "Filter by category", Required: false, Choices: []*discordgo.ApplicationCommandOptionChoice{
@@ -824,6 +970,103 @@ func allCommands() []*discordgo.ApplicationCommand {
 			}},
 			{Type: discordgo.ApplicationCommandOptionSubCommand, Name: "warnings", Description: "View warnings for a member", Options: []*discordgo.ApplicationCommandOption{
 				{Type: discordgo.ApplicationCommandOptionUser, Name: "user", Description: "User to check", Required: true},
+			}},
+			{Type: discordgo.ApplicationCommandOptionSubCommand, Name: "softban", Description: "Ban + immediate unban to purge messages", Options: []*discordgo.ApplicationCommandOption{
+				{Type: discordgo.ApplicationCommandOptionUser, Name: "user", Description: "User to softban", Required: true},
+				{Type: discordgo.ApplicationCommandOptionString, Name: "reason", Description: "Reason for softban", Required: false},
+			}},
+			{Type: discordgo.ApplicationCommandOptionSubCommand, Name: "history", Description: "Full moderation history for a user", Options: []*discordgo.ApplicationCommandOption{
+				{Type: discordgo.ApplicationCommandOptionUser, Name: "user", Description: "User to view history for", Required: true},
+			}},
+			{Type: discordgo.ApplicationCommandOptionSubCommand, Name: "case", Description: "View a specific mod case by ID", Options: []*discordgo.ApplicationCommandOption{
+				{Type: discordgo.ApplicationCommandOptionString, Name: "id", Description: "Case ID to look up", Required: true},
+			}},
+			{Type: discordgo.ApplicationCommandOptionSubCommand, Name: "reason", Description: "Update the reason for a mod case", Options: []*discordgo.ApplicationCommandOption{
+				{Type: discordgo.ApplicationCommandOptionString, Name: "case_id", Description: "Case ID to update", Required: true},
+				{Type: discordgo.ApplicationCommandOptionString, Name: "reason", Description: "New reason", Required: true},
+			}},
+			{Type: discordgo.ApplicationCommandOptionSubCommand, Name: "report", Description: "Report a user to the moderators", Options: []*discordgo.ApplicationCommandOption{
+				{Type: discordgo.ApplicationCommandOptionUser, Name: "user", Description: "User to report", Required: true},
+				{Type: discordgo.ApplicationCommandOptionString, Name: "reason", Description: "Reason for report", Required: true},
+			}},
+			{Type: discordgo.ApplicationCommandOptionSubCommand, Name: "reports", Description: "View user reports (Manage Messages)", Options: []*discordgo.ApplicationCommandOption{
+				{Type: discordgo.ApplicationCommandOptionUser, Name: "user", Description: "Filter by reported user (optional)", Required: false},
+			}},
+			{Type: discordgo.ApplicationCommandOptionSubCommand, Name: "massban", Description: "Ban multiple users at once", Options: []*discordgo.ApplicationCommandOption{
+				{Type: discordgo.ApplicationCommandOptionUser, Name: "user1", Description: "First user to ban", Required: true},
+				{Type: discordgo.ApplicationCommandOptionUser, Name: "user2", Description: "Second user to ban", Required: true},
+				{Type: discordgo.ApplicationCommandOptionUser, Name: "user3", Description: "Third user to ban", Required: false},
+				{Type: discordgo.ApplicationCommandOptionUser, Name: "user4", Description: "Fourth user to ban", Required: false},
+				{Type: discordgo.ApplicationCommandOptionUser, Name: "user5", Description: "Fifth user to ban", Required: false},
+				{Type: discordgo.ApplicationCommandOptionString, Name: "reason", Description: "Reason for mass ban", Required: false},
+			}},
+			{Type: discordgo.ApplicationCommandOptionSubCommand, Name: "modnote", Description: "Add a private moderation note about a user", Options: []*discordgo.ApplicationCommandOption{
+				{Type: discordgo.ApplicationCommandOptionUser, Name: "user", Description: "User to add note for", Required: true},
+				{Type: discordgo.ApplicationCommandOptionString, Name: "note", Description: "Note content", Required: true},
+			}},
+		}},
+		// ── /level ───────────────────────────────────────────────────────
+		{Name: "level", Description: "Leveling and XP system", Options: []*discordgo.ApplicationCommandOption{
+			{Type: discordgo.ApplicationCommandOptionSubCommand, Name: "view", Description: "View your level card", Options: []*discordgo.ApplicationCommandOption{
+				{Type: discordgo.ApplicationCommandOptionUser, Name: "user", Description: "User to view (default: yourself)", Required: false},
+			}},
+			{Type: discordgo.ApplicationCommandOptionSubCommand, Name: "leaderboard", Description: "View the XP leaderboard"},
+			{Type: discordgo.ApplicationCommandOptionSubCommand, Name: "rewards", Description: "View role rewards per level"},
+			{Type: discordgo.ApplicationCommandOptionSubCommand, Name: "set-reward", Description: "Set a role reward for a level (Admin)", Options: []*discordgo.ApplicationCommandOption{
+				{Type: discordgo.ApplicationCommandOptionInteger, Name: "level", Description: "Level to set reward for", Required: true, MinValue: minv(1)},
+				{Type: discordgo.ApplicationCommandOptionRole, Name: "role", Description: "Role to award", Required: true},
+			}},
+			{Type: discordgo.ApplicationCommandOptionSubCommand, Name: "set-channel", Description: "Set level-up announcement channel (Admin)", Options: []*discordgo.ApplicationCommandOption{
+				{Type: discordgo.ApplicationCommandOptionChannel, Name: "channel", Description: "Channel for level-up announcements", Required: true},
+			}},
+			{Type: discordgo.ApplicationCommandOptionSubCommand, Name: "toggle", Description: "Enable or disable the leveling system (Admin)"},
+			{Type: discordgo.ApplicationCommandOptionSubCommand, Name: "reset", Description: "Reset a user's XP (Admin)", Options: []*discordgo.ApplicationCommandOption{
+				{Type: discordgo.ApplicationCommandOptionUser, Name: "user", Description: "User to reset", Required: true},
+			}},
+			{Type: discordgo.ApplicationCommandOptionSubCommand, Name: "set-multiplier", Description: "Set XP multiplier (Admin)", Options: []*discordgo.ApplicationCommandOption{
+				{Type: discordgo.ApplicationCommandOptionNumber, Name: "multiplier", Description: "XP multiplier (0.5-5.0)", Required: true, MinValue: minv(0.5), MaxValue: 5.0},
+			}},
+		}},
+		// ── /welcome ─────────────────────────────────────────────────────
+		{Name: "welcome", Description: "Configure welcome and leave messages", Options: []*discordgo.ApplicationCommandOption{
+			{Type: discordgo.ApplicationCommandOptionSubCommand, Name: "setup", Description: "Set the welcome channel and message (Manage Server)", Options: []*discordgo.ApplicationCommandOption{
+				{Type: discordgo.ApplicationCommandOptionChannel, Name: "channel", Description: "Channel for welcome messages", Required: true},
+				{Type: discordgo.ApplicationCommandOptionString, Name: "message", Description: "Custom welcome message ({user}, {username}, {server}, {membercount})", Required: false},
+			}},
+			{Type: discordgo.ApplicationCommandOptionSubCommand, Name: "set-leave", Description: "Set the leave channel and message (Manage Server)", Options: []*discordgo.ApplicationCommandOption{
+				{Type: discordgo.ApplicationCommandOptionChannel, Name: "channel", Description: "Channel for leave messages", Required: true},
+				{Type: discordgo.ApplicationCommandOptionString, Name: "message", Description: "Custom leave message ({user}, {username}, {server}, {membercount})", Required: false},
+			}},
+			{Type: discordgo.ApplicationCommandOptionSubCommand, Name: "set-role", Description: "Set auto-role for new members (Manage Roles)", Options: []*discordgo.ApplicationCommandOption{
+				{Type: discordgo.ApplicationCommandOptionRole, Name: "role", Description: "Role to assign on join", Required: true},
+			}},
+			{Type: discordgo.ApplicationCommandOptionSubCommand, Name: "toggle", Description: "Enable or disable welcome/leave messages (Manage Server)"},
+			{Type: discordgo.ApplicationCommandOptionSubCommand, Name: "test", Description: "Preview the welcome message for yourself"},
+			{Type: discordgo.ApplicationCommandOptionSubCommand, Name: "set-image", Description: "Set a custom banner image for welcome messages (Manage Server)", Options: []*discordgo.ApplicationCommandOption{
+				{Type: discordgo.ApplicationCommandOptionString, Name: "url", Description: "Banner image URL", Required: true},
+			}},
+		}},
+		// ── /music ──────────────────────────────────────────────────────────
+		{Name: "music", Description: "Music player and queue management", Options: []*discordgo.ApplicationCommandOption{
+			{Type: discordgo.ApplicationCommandOptionSubCommand, Name: "play", Description: "Play a song or add it to the queue", Options: []*discordgo.ApplicationCommandOption{
+				{Type: discordgo.ApplicationCommandOptionString, Name: "query", Description: "Song name or URL", Required: true},
+			}},
+			{Type: discordgo.ApplicationCommandOptionSubCommand, Name: "pause", Description: "Pause the current song"},
+			{Type: discordgo.ApplicationCommandOptionSubCommand, Name: "resume", Description: "Resume playback"},
+			{Type: discordgo.ApplicationCommandOptionSubCommand, Name: "skip", Description: "Skip to the next song in the queue"},
+			{Type: discordgo.ApplicationCommandOptionSubCommand, Name: "stop", Description: "Stop playback, clear queue, and disconnect"},
+			{Type: discordgo.ApplicationCommandOptionSubCommand, Name: "queue", Description: "Show the current music queue"},
+			{Type: discordgo.ApplicationCommandOptionSubCommand, Name: "nowplaying", Description: "Show the currently playing song"},
+			{Type: discordgo.ApplicationCommandOptionSubCommand, Name: "volume", Description: "Set the playback volume", Options: []*discordgo.ApplicationCommandOption{
+				{Type: discordgo.ApplicationCommandOptionInteger, Name: "level", Description: "Volume level (1-100)", Required: true, MinValue: minv(1), MaxValue: 100},
+			}},
+			{Type: discordgo.ApplicationCommandOptionSubCommand, Name: "shuffle", Description: "Shuffle the upcoming songs in the queue"},
+			{Type: discordgo.ApplicationCommandOptionSubCommand, Name: "loop", Description: "Set loop mode", Options: []*discordgo.ApplicationCommandOption{
+				{Type: discordgo.ApplicationCommandOptionString, Name: "mode", Description: "Loop mode", Required: true, Choices: []*discordgo.ApplicationCommandOptionChoice{
+					{Name: "Off", Value: "off"},
+					{Name: "Song", Value: "song"},
+					{Name: "Queue", Value: "queue"},
+				}},
 			}},
 		}},
 	}

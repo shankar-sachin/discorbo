@@ -97,10 +97,11 @@ func notifyUser(s *discordgo.Session, userID, action, reason, guildName string) 
 	}
 
 	embed := &discordgo.MessageEmbed{
-		Title:       fmt.Sprintf("You were %s from %s", action, guildName),
+		Title:       fmt.Sprintf("⚠️ You were %s from %s", action, guildName),
 		Description: fmt.Sprintf("**Reason:** %s", reason),
-		Color:       ColorRed,
+		Color:       ColorMod,
 		Timestamp:   time.Now().Format(time.RFC3339),
+		Footer:      embedFooter("🛡️ Moderation"),
 	}
 
 	_, err = s.ChannelMessageSendEmbed(ch.ID, embed)
@@ -125,16 +126,24 @@ func logModAction(s *discordgo.Session, guildID string, action modAction) {
 	}
 
 	// Create embed for mod log
+	actionColors := map[string]int{
+		"kick": 0xF39C12, "ban": ColorRed, "unban": ColorGreen,
+		"warn": ColorYellow, "timeout": 0xE67E22, "purge": ColorBlue,
+	}
+	color := ColorMod
+	if c, ok := actionColors[action.Type]; ok {
+		color = c
+	}
 	embed := &discordgo.MessageEmbed{
-		Title: fmt.Sprintf("🛡️ Moderation: %s", strings.ToUpper(action.Type)),
+		Title: fmt.Sprintf("🛡️ %s", strings.ToUpper(action.Type)),
 		Fields: []*discordgo.MessageEmbedField{
-			{Name: "User", Value: fmt.Sprintf("<@%s> (%s)", action.UserID, action.Username), Inline: true},
-			{Name: "Moderator", Value: fmt.Sprintf("<@%s>", action.ModeratorID), Inline: true},
-			{Name: "Reason", Value: action.Reason, Inline: false},
+			{Name: "👤 User", Value: fmt.Sprintf("<@%s> (%s)", action.UserID, action.Username), Inline: true},
+			{Name: "🔨 Moderator", Value: fmt.Sprintf("<@%s>", action.ModeratorID), Inline: true},
+			{Name: "📝 Reason", Value: action.Reason, Inline: false},
 		},
-		Color:     ColorYellow,
+		Color:     color,
 		Timestamp: time.Now().Format(time.RFC3339),
-		Footer:    &discordgo.MessageEmbedFooter{Text: fmt.Sprintf("ID: %s", action.ID)},
+		Footer:    &discordgo.MessageEmbedFooter{Text: fmt.Sprintf("Case #%s  •  %s", action.ID[:8], botVersion)},
 	}
 
 	// Add duration for timeouts
@@ -211,7 +220,7 @@ func generateID(prefix string) string {
 func handleKick(s *discordgo.Session, i *discordgo.InteractionCreate, opts []*discordgo.ApplicationCommandInteractionDataOption) {
 	user := interactionUser(i)
 	if user == nil {
-		respondText(s, i, "Unable to identify user.")
+		respondError(s, i, "Error", "Unable to identify user.")
 		return
 	}
 
@@ -232,12 +241,12 @@ func handleKick(s *discordgo.Session, i *discordgo.InteractionCreate, opts []*di
 
 	targetUser := optionUser(opts, "user")
 	if targetUser == nil {
-		respondText(s, i, "You must specify a user to kick.")
+		respondError(s, i, "Missing Input", "You must specify a user to kick.")
 		return
 	}
 
 	if targetUser.Bot {
-		respondText(s, i, "You cannot kick bots.")
+		respondError(s, i, "Invalid Target", "You cannot kick bots.")
 		return
 	}
 
@@ -249,13 +258,13 @@ func handleKick(s *discordgo.Session, i *discordgo.InteractionCreate, opts []*di
 	// Get members for hierarchy check
 	moderator, err := s.GuildMember(i.GuildID, user.ID)
 	if err != nil {
-		respondText(s, i, "Failed to fetch moderator information.")
+		respondError(s, i, "Error", "Failed to fetch moderator information.")
 		return
 	}
 
 	target, err := s.GuildMember(i.GuildID, targetUser.ID)
 	if err != nil {
-		respondText(s, i, "Failed to fetch target member information.")
+		respondError(s, i, "Error", "Failed to fetch target member information.")
 		return
 	}
 
@@ -299,7 +308,7 @@ func handleKick(s *discordgo.Session, i *discordgo.InteractionCreate, opts []*di
 	logModAction(s, i.GuildID, action)
 
 	// Success response
-	embed := createSuccessEmbed("Member Kicked", fmt.Sprintf("**%s** has been kicked.\n**Reason:** %s", targetUser.Username, reason))
+	embed := createModEmbed("👢 Member Kicked", fmt.Sprintf("**%s** has been kicked.\n**Reason:** %s", targetUser.Username, reason))
 	respondEmbed(s, i, embed)
 }
 
@@ -310,7 +319,7 @@ func handleKick(s *discordgo.Session, i *discordgo.InteractionCreate, opts []*di
 func handleBan(s *discordgo.Session, i *discordgo.InteractionCreate, opts []*discordgo.ApplicationCommandInteractionDataOption) {
 	user := interactionUser(i)
 	if user == nil {
-		respondText(s, i, "Unable to identify user.")
+		respondError(s, i, "Error", "Unable to identify user.")
 		return
 	}
 
@@ -331,12 +340,12 @@ func handleBan(s *discordgo.Session, i *discordgo.InteractionCreate, opts []*dis
 
 	targetUser := optionUser(opts, "user")
 	if targetUser == nil {
-		respondText(s, i, "You must specify a user to ban.")
+		respondError(s, i, "Missing Input", "You must specify a user to ban.")
 		return
 	}
 
 	if targetUser.Bot {
-		respondText(s, i, "You cannot ban bots.")
+		respondError(s, i, "Invalid Target", "You cannot ban bots.")
 		return
 	}
 
@@ -356,7 +365,7 @@ func handleBan(s *discordgo.Session, i *discordgo.InteractionCreate, opts []*dis
 	// Get members for hierarchy check
 	moderator, err := s.GuildMember(i.GuildID, user.ID)
 	if err != nil {
-		respondText(s, i, "Failed to fetch moderator information.")
+		respondError(s, i, "Error", "Failed to fetch moderator information.")
 		return
 	}
 
@@ -410,7 +419,7 @@ func handleBan(s *discordgo.Session, i *discordgo.InteractionCreate, opts []*dis
 	if deleteDays > 0 {
 		deleteMsg = fmt.Sprintf("\n**Messages deleted:** Last %d day(s)", deleteDays)
 	}
-	embed := createSuccessEmbed("Member Banned", fmt.Sprintf("**%s** has been banned.\n**Reason:** %s%s", targetUser.Username, reason, deleteMsg))
+	embed := createModEmbed("🔨 Member Banned", fmt.Sprintf("**%s** has been banned.\n**Reason:** %s%s", targetUser.Username, reason, deleteMsg))
 	respondEmbed(s, i, embed)
 }
 
@@ -421,7 +430,7 @@ func handleBan(s *discordgo.Session, i *discordgo.InteractionCreate, opts []*dis
 func handleUnban(s *discordgo.Session, i *discordgo.InteractionCreate, opts []*discordgo.ApplicationCommandInteractionDataOption) {
 	user := interactionUser(i)
 	if user == nil {
-		respondText(s, i, "Unable to identify user.")
+		respondError(s, i, "Error", "Unable to identify user.")
 		return
 	}
 
@@ -434,7 +443,7 @@ func handleUnban(s *discordgo.Session, i *discordgo.InteractionCreate, opts []*d
 
 	userID := optionString(opts, "user_id", "")
 	if userID == "" {
-		respondText(s, i, "You must specify a user ID to unban.")
+		respondError(s, i, "Missing Input", "You must specify a user ID to unban.")
 		return
 	}
 
@@ -477,7 +486,7 @@ func handleUnban(s *discordgo.Session, i *discordgo.InteractionCreate, opts []*d
 func handleTimeout(s *discordgo.Session, i *discordgo.InteractionCreate, opts []*discordgo.ApplicationCommandInteractionDataOption) {
 	user := interactionUser(i)
 	if user == nil {
-		respondText(s, i, "Unable to identify user.")
+		respondError(s, i, "Error", "Unable to identify user.")
 		return
 	}
 
@@ -490,24 +499,24 @@ func handleTimeout(s *discordgo.Session, i *discordgo.InteractionCreate, opts []
 
 	targetUser := optionUser(opts, "user")
 	if targetUser == nil {
-		respondText(s, i, "You must specify a user to timeout.")
+		respondError(s, i, "Missing Input", "You must specify a user to timeout.")
 		return
 	}
 
 	if targetUser.Bot {
-		respondText(s, i, "You cannot timeout bots.")
+		respondError(s, i, "Invalid Target", "You cannot timeout bots.")
 		return
 	}
 
 	duration := optionString(opts, "duration", "")
 	if duration == "" {
-		respondText(s, i, "You must specify a duration.")
+		respondError(s, i, "Invalid Input", "You must specify a duration.")
 		return
 	}
 
 	durationSeconds := parseDuration(duration)
 	if durationSeconds == 0 || durationSeconds > 28*86400 {
-		respondText(s, i, "Invalid duration. Max is 28 days.")
+		respondError(s, i, "Invalid Input", "Invalid duration. Max is 28 days.")
 		return
 	}
 
@@ -519,13 +528,13 @@ func handleTimeout(s *discordgo.Session, i *discordgo.InteractionCreate, opts []
 	// Get members for hierarchy check
 	moderator, err := s.GuildMember(i.GuildID, user.ID)
 	if err != nil {
-		respondText(s, i, "Failed to fetch moderator information.")
+		respondError(s, i, "Error", "Failed to fetch moderator information.")
 		return
 	}
 
 	target, err := s.GuildMember(i.GuildID, targetUser.ID)
 	if err != nil {
-		respondText(s, i, "Failed to fetch target member information.")
+		respondError(s, i, "Error", "Failed to fetch target member information.")
 		return
 	}
 
@@ -584,7 +593,7 @@ func handleTimeout(s *discordgo.Session, i *discordgo.InteractionCreate, opts []
 func handleWarn(s *discordgo.Session, i *discordgo.InteractionCreate, opts []*discordgo.ApplicationCommandInteractionDataOption) {
 	user := interactionUser(i)
 	if user == nil {
-		respondText(s, i, "Unable to identify user.")
+		respondError(s, i, "Error", "Unable to identify user.")
 		return
 	}
 
@@ -597,18 +606,18 @@ func handleWarn(s *discordgo.Session, i *discordgo.InteractionCreate, opts []*di
 
 	targetUser := optionUser(opts, "user")
 	if targetUser == nil {
-		respondText(s, i, "You must specify a user to warn.")
+		respondError(s, i, "Missing Input", "You must specify a user to warn.")
 		return
 	}
 
 	if targetUser.Bot {
-		respondText(s, i, "You cannot warn bots.")
+		respondError(s, i, "Invalid Target", "You cannot warn bots.")
 		return
 	}
 
 	reason := optionString(opts, "reason", "")
 	if reason == "" {
-		respondText(s, i, "You must provide a reason for the warning.")
+		respondError(s, i, "Missing Input", "You must provide a reason for the warning.")
 		return
 	}
 
@@ -656,6 +665,7 @@ func handleWarn(s *discordgo.Session, i *discordgo.InteractionCreate, opts []*di
 			Description: fmt.Sprintf("**Reason:** %s\n**Total Warnings:** %d", reason, totalWarnings),
 			Color:       ColorYellow,
 			Timestamp:   time.Now().Format(time.RFC3339),
+			Footer:      embedFooter("🛡️ Moderation"),
 		}
 		_, _ = s.ChannelMessageSendEmbed(ch.ID, embed)
 	}
@@ -675,7 +685,7 @@ func handleWarn(s *discordgo.Session, i *discordgo.InteractionCreate, opts []*di
 	logModAction(s, i.GuildID, action)
 
 	// Success response
-	embed := createSuccessEmbed("Warning Issued", fmt.Sprintf("**%s** has been warned.\n**Reason:** %s\n**Total Warnings:** %d", targetUser.Username, reason, totalWarnings))
+	embed := createModEmbed("⚠️ Warning Issued", fmt.Sprintf("**%s** has been warned.\n**Reason:** %s\n**Total Warnings:** %d", targetUser.Username, reason, totalWarnings))
 	respondEmbed(s, i, embed)
 }
 
@@ -686,7 +696,7 @@ func handleWarn(s *discordgo.Session, i *discordgo.InteractionCreate, opts []*di
 func handleWarnings(s *discordgo.Session, i *discordgo.InteractionCreate, opts []*discordgo.ApplicationCommandInteractionDataOption) {
 	user := interactionUser(i)
 	if user == nil {
-		respondText(s, i, "Unable to identify user.")
+		respondError(s, i, "Error", "Unable to identify user.")
 		return
 	}
 
@@ -699,7 +709,7 @@ func handleWarnings(s *discordgo.Session, i *discordgo.InteractionCreate, opts [
 
 	targetUser := optionUser(opts, "user")
 	if targetUser == nil {
-		respondText(s, i, "You must specify a user.")
+		respondError(s, i, "Missing Input", "You must specify a user.")
 		return
 	}
 
@@ -732,13 +742,13 @@ func handleWarnings(s *discordgo.Session, i *discordgo.InteractionCreate, opts [
 		warningsList += fmt.Sprintf("**#%d** - %s\n**Moderator:** %s\n**Reason:** %s\n\n", idx+1, timestamp, w.Moderator, w.Reason)
 	}
 
-	embed := &discordgo.MessageEmbed{
-		Title:       fmt.Sprintf("⚠️ Warnings for %s", targetUser.Username),
-		Description: fmt.Sprintf("**Total Warnings:** %d\n\n%s", len(userWarnings), warningsList),
-		Color:       ColorYellow,
-		Timestamp:   time.Now().Format(time.RFC3339),
-		Thumbnail:   &discordgo.MessageEmbedThumbnail{URL: userAvatar(targetUser)},
-	}
+	embed := richEmbed(richEmbedOpts{
+		Title:        fmt.Sprintf("⚠️ Warnings for %s", targetUser.Username),
+		Description:  fmt.Sprintf("**Total Warnings:** %d\n\n%s", len(userWarnings), warningsList),
+		Color:        ColorMod,
+		Category:     "🛡️ Moderation",
+		ThumbnailURL: userAvatar(targetUser),
+	})
 
 	respondEmbed(s, i, embed)
 }
@@ -750,7 +760,7 @@ func handleWarnings(s *discordgo.Session, i *discordgo.InteractionCreate, opts [
 func handleClearWarnings(s *discordgo.Session, i *discordgo.InteractionCreate, opts []*discordgo.ApplicationCommandInteractionDataOption) {
 	user := interactionUser(i)
 	if user == nil {
-		respondText(s, i, "Unable to identify user.")
+		respondError(s, i, "Error", "Unable to identify user.")
 		return
 	}
 
@@ -763,7 +773,7 @@ func handleClearWarnings(s *discordgo.Session, i *discordgo.InteractionCreate, o
 
 	targetUser := optionUser(opts, "user")
 	if targetUser == nil {
-		respondText(s, i, "You must specify a user.")
+		respondError(s, i, "Missing Input", "You must specify a user.")
 		return
 	}
 
@@ -823,7 +833,7 @@ func handleClearWarnings(s *discordgo.Session, i *discordgo.InteractionCreate, o
 func handlePurge(s *discordgo.Session, i *discordgo.InteractionCreate, opts []*discordgo.ApplicationCommandInteractionDataOption) {
 	user := interactionUser(i)
 	if user == nil {
-		respondText(s, i, "Unable to identify user.")
+		respondError(s, i, "Error", "Unable to identify user.")
 		return
 	}
 
@@ -844,7 +854,7 @@ func handlePurge(s *discordgo.Session, i *discordgo.InteractionCreate, opts []*d
 
 	amount := int(optionInt(opts, "amount", 0))
 	if amount < 2 || amount > 100 {
-		respondText(s, i, "Amount must be between 2 and 100.")
+		respondError(s, i, "Invalid Input", "Amount must be between 2 and 100.")
 		return
 	}
 
@@ -876,7 +886,7 @@ func handlePurge(s *discordgo.Session, i *discordgo.InteractionCreate, opts []*d
 	}
 
 	if len(toDelete) == 0 {
-		respondText(s, i, "No messages found matching the filters.")
+		respondError(s, i, "No Messages", "No messages found matching the filters.")
 		return
 	}
 
@@ -921,7 +931,7 @@ func handlePurge(s *discordgo.Session, i *discordgo.InteractionCreate, opts []*d
 func handleLock(s *discordgo.Session, i *discordgo.InteractionCreate, opts []*discordgo.ApplicationCommandInteractionDataOption) {
 	user := interactionUser(i)
 	if user == nil {
-		respondText(s, i, "Unable to identify user.")
+		respondError(s, i, "Error", "Unable to identify user.")
 		return
 	}
 
@@ -966,6 +976,7 @@ func handleLock(s *discordgo.Session, i *discordgo.InteractionCreate, opts []*di
 		Description: fmt.Sprintf("**Reason:** %s\n**Moderator:** <@%s>", reason, user.ID),
 		Color:       ColorRed,
 		Timestamp:   time.Now().Format(time.RFC3339),
+		Footer:      embedFooter("🛡️ Moderation"),
 	}
 	_, _ = s.ChannelMessageSendEmbed(channelID, lockEmbed)
 
@@ -995,7 +1006,7 @@ func handleLock(s *discordgo.Session, i *discordgo.InteractionCreate, opts []*di
 func handleUnlock(s *discordgo.Session, i *discordgo.InteractionCreate, opts []*discordgo.ApplicationCommandInteractionDataOption) {
 	user := interactionUser(i)
 	if user == nil {
-		respondText(s, i, "Unable to identify user.")
+		respondError(s, i, "Error", "Unable to identify user.")
 		return
 	}
 
@@ -1041,6 +1052,7 @@ func handleUnlock(s *discordgo.Session, i *discordgo.InteractionCreate, opts []*
 		Description: fmt.Sprintf("**Moderator:** <@%s>", user.ID),
 		Color:       ColorGreen,
 		Timestamp:   time.Now().Format(time.RFC3339),
+		Footer:      embedFooter("🛡️ Moderation"),
 	}
 	_, _ = s.ChannelMessageSendEmbed(channelID, unlockEmbed)
 
@@ -1070,7 +1082,7 @@ func handleUnlock(s *discordgo.Session, i *discordgo.InteractionCreate, opts []*
 func handleSlowmode(s *discordgo.Session, i *discordgo.InteractionCreate, opts []*discordgo.ApplicationCommandInteractionDataOption) {
 	user := interactionUser(i)
 	if user == nil {
-		respondText(s, i, "Unable to identify user.")
+		respondError(s, i, "Error", "Unable to identify user.")
 		return
 	}
 
@@ -1089,7 +1101,7 @@ func handleSlowmode(s *discordgo.Session, i *discordgo.InteractionCreate, opts [
 
 	seconds := int(optionInt(opts, "seconds", 0))
 	if seconds < 0 || seconds > 21600 {
-		respondText(s, i, "Slowmode delay must be between 0 and 21600 seconds (6 hours).")
+		respondError(s, i, "Invalid Input", "Slowmode delay must be between 0 and 21600 seconds (6 hours).")
 		return
 	}
 
@@ -1141,7 +1153,7 @@ func handleSlowmode(s *discordgo.Session, i *discordgo.InteractionCreate, opts [
 func handleModlog(s *discordgo.Session, i *discordgo.InteractionCreate, opts []*discordgo.ApplicationCommandInteractionDataOption) {
 	user := interactionUser(i)
 	if user == nil {
-		respondText(s, i, "Unable to identify user.")
+		respondError(s, i, "Error", "Unable to identify user.")
 		return
 	}
 
@@ -1160,14 +1172,14 @@ func handleModlog(s *discordgo.Session, i *discordgo.InteractionCreate, opts []*
 	case "view":
 		handleModlogView(s, i, subOpts)
 	default:
-		respondText(s, i, "Invalid subcommand.")
+		respondError(s, i, "Error", "Invalid subcommand.")
 	}
 }
 
 func handleModlogSetup(s *discordgo.Session, i *discordgo.InteractionCreate, opts []*discordgo.ApplicationCommandInteractionDataOption) {
 	channel := optionChannel(opts, "channel")
 	if channel == nil {
-		respondText(s, i, "You must specify a channel.")
+		respondError(s, i, "Missing Input", "You must specify a channel.")
 		return
 	}
 
@@ -1281,7 +1293,7 @@ func handleModlogView(s *discordgo.Session, i *discordgo.InteractionCreate, opts
 		Title:       title,
 		Description: description,
 		Color:       ColorBlue,
-		Footer:      &discordgo.MessageEmbedFooter{Text: fmt.Sprintf("Showing last %d of %d actions", len(guildActions)-start, totalCount)},
+		Footer:      &discordgo.MessageEmbedFooter{Text: fmt.Sprintf("Showing last %d of %d actions • %s", len(guildActions)-start, totalCount, botVersion)},
 		Timestamp:   time.Now().Format(time.RFC3339),
 	}
 	if targetUser != nil {
@@ -1298,7 +1310,7 @@ func handleModlogView(s *discordgo.Session, i *discordgo.InteractionCreate, opts
 func handleAutomod(s *discordgo.Session, i *discordgo.InteractionCreate, opts []*discordgo.ApplicationCommandInteractionDataOption) {
 	user := interactionUser(i)
 	if user == nil {
-		respondText(s, i, "Unable to identify user.")
+		respondError(s, i, "Error", "Unable to identify user.")
 		return
 	}
 
@@ -1317,7 +1329,7 @@ func handleAutomod(s *discordgo.Session, i *discordgo.InteractionCreate, opts []
 	case "toggle":
 		handleAutomodToggle(s, i, subOpts)
 	default:
-		respondText(s, i, "Invalid subcommand.")
+		respondError(s, i, "Error", "Invalid subcommand.")
 	}
 }
 
@@ -1371,7 +1383,7 @@ func handleAutomodSetup(s *discordgo.Session, i *discordgo.InteractionCreate) {
 			{Name: "Emoji Spam", Value: formatEnabled(config.AutoMod.EmojiSpamEnabled), Inline: true},
 			{Name: "External Links", Value: formatEnabled(config.AutoMod.LinksEnabled), Inline: true},
 		},
-		Footer:    &discordgo.MessageEmbedFooter{Text: "Use /automod toggle to enable/disable specific rules"},
+		Footer:    &discordgo.MessageEmbedFooter{Text: fmt.Sprintf("Use /automod toggle to enable/disable specific rules • %s", botVersion)},
 		Timestamp: time.Now().Format(time.RFC3339),
 	}
 
@@ -1383,7 +1395,7 @@ func handleAutomodToggle(s *discordgo.Session, i *discordgo.InteractionCreate, o
 	enabled := optionBool(opts, "enabled", false)
 
 	if rule == "" {
-		respondText(s, i, "You must specify a rule to toggle.")
+		respondError(s, i, "Missing Input", "You must specify a rule to toggle.")
 		return
 	}
 
@@ -1408,7 +1420,7 @@ func handleAutomodToggle(s *discordgo.Session, i *discordgo.InteractionCreate, o
 	case "links":
 		config.AutoMod.LinksEnabled = enabled
 	default:
-		respondText(s, i, "Invalid rule specified.")
+		respondError(s, i, "Invalid Input", "Invalid rule specified.")
 		return
 	}
 
@@ -1595,6 +1607,7 @@ func sendAutomodWarning(s *discordgo.Session, m *discordgo.MessageCreate, reason
 		Description: fmt.Sprintf("Your message was removed in the server.\n**Reason:** %s", reason),
 		Color:       ColorYellow,
 		Timestamp:   time.Now().Format(time.RFC3339),
+		Footer:      embedFooter("🛡️ Moderation"),
 	}
 
 	_, _ = s.ChannelMessageSendEmbed(ch.ID, embed)
@@ -1690,5 +1703,539 @@ func handleModCmd(s *discordgo.Session, i *discordgo.InteractionCreate) {
 		handleRole(s, i, subOpts)
 	case "announce":
 		handleAnnounce(s, i, subOpts)
+	case "softban":
+		handleSoftban(s, i, subOpts)
+	case "history":
+		handleHistory(s, i, subOpts)
+	case "case":
+		handleCase(s, i, subOpts)
+	case "reason":
+		handleReason(s, i, subOpts)
+	case "report":
+		handleReport(s, i, subOpts)
+	case "reports":
+		handleReports(s, i, subOpts)
+	case "massban":
+		handleMassban(s, i, subOpts)
+	case "modnote":
+		handleModnote(s, i, subOpts)
 	}
+}
+
+// ============================================================================
+// SOFTBAN COMMAND
+// ============================================================================
+
+func handleSoftban(s *discordgo.Session, i *discordgo.InteractionCreate, opts []*discordgo.ApplicationCommandInteractionDataOption) {
+	user := interactionUser(i)
+	if user == nil {
+		respondError(s, i, "Error", "Unable to identify user.")
+		return
+	}
+
+	if !hasPermission(s, i.GuildID, user.ID, discordgo.PermissionBanMembers) {
+		embed := createErrorEmbed("Missing Permissions", "You need the `Ban Members` permission to use this command.")
+		respondEmbed(s, i, embed)
+		return
+	}
+
+	botPerms, err := s.UserChannelPermissions(s.State.User.ID, i.ChannelID)
+	if err != nil || botPerms&discordgo.PermissionBanMembers == 0 {
+		embed := createErrorEmbed("Bot Missing Permissions", "I don't have permission to ban members.")
+		respondEmbed(s, i, embed)
+		return
+	}
+
+	targetUser := optionUser(opts, "user")
+	if targetUser == nil {
+		respondError(s, i, "Missing Input", "You must specify a user to softban.")
+		return
+	}
+
+	if targetUser.Bot {
+		respondError(s, i, "Invalid Target", "You cannot softban bots.")
+		return
+	}
+
+	reason := optionString(opts, "reason", "")
+	if reason == "" {
+		reason = "No reason provided"
+	}
+
+	moderator, err := s.GuildMember(i.GuildID, user.ID)
+	if err != nil {
+		respondError(s, i, "Error", "Failed to fetch moderator information.")
+		return
+	}
+
+	target, err := s.GuildMember(i.GuildID, targetUser.ID)
+	if err != nil {
+		target = &discordgo.Member{User: targetUser, GuildID: i.GuildID}
+	} else {
+		if !canModerate(s, i.GuildID, moderator, target) {
+			embed := createErrorEmbed("Cannot Moderate", "You cannot softban this user (they have a higher or equal role).")
+			respondEmbed(s, i, embed)
+			return
+		}
+	}
+
+	guild, _ := s.Guild(i.GuildID)
+	guildName := "the server"
+	if guild != nil {
+		guildName = guild.Name
+	}
+
+	_ = notifyUser(s, targetUser.ID, "softbanned", reason, guildName)
+
+	// Ban with 7 days message delete
+	err = s.GuildBanCreateWithReason(i.GuildID, targetUser.ID, reason, 7)
+	if err != nil {
+		embed := createErrorEmbed("Softban Failed", fmt.Sprintf("Failed to ban user: %v", err))
+		respondEmbed(s, i, embed)
+		return
+	}
+
+	// Immediately unban
+	err = s.GuildBanDelete(i.GuildID, targetUser.ID)
+	if err != nil {
+		embed := createErrorEmbed("Softban Partial Failure", fmt.Sprintf("User was banned but could not be unbanned: %v", err))
+		respondEmbed(s, i, embed)
+		return
+	}
+
+	action := modAction{
+		ID:          generateID("softban"),
+		Type:        "softban",
+		UserID:      targetUser.ID,
+		Username:    targetUser.Username,
+		ModeratorID: user.ID,
+		Moderator:   user.Username,
+		Reason:      reason,
+		Timestamp:   time.Now().Unix(),
+		GuildID:     i.GuildID,
+	}
+	logModAction(s, i.GuildID, action)
+
+	embed := createSuccessEmbed("Member Softbanned", fmt.Sprintf("**%s** has been softbanned.\n**Reason:** %s\n**Messages deleted:** Last 7 days", targetUser.Username, reason))
+	respondEmbed(s, i, embed)
+}
+
+// ============================================================================
+// HISTORY COMMAND
+// ============================================================================
+
+func handleHistory(s *discordgo.Session, i *discordgo.InteractionCreate, opts []*discordgo.ApplicationCommandInteractionDataOption) {
+	user := interactionUser(i)
+	if user == nil {
+		respondError(s, i, "Error", "Unable to identify user.")
+		return
+	}
+
+	if !hasPermission(s, i.GuildID, user.ID, discordgo.PermissionManageMessages) {
+		embed := createErrorEmbed("Missing Permissions", "You need the `Manage Messages` permission to use this command.")
+		respondEmbed(s, i, embed)
+		return
+	}
+
+	targetUser := optionUser(opts, "user")
+	if targetUser == nil {
+		respondError(s, i, "Missing Input", "You must specify a user.")
+		return
+	}
+
+	actions := []modAction{}
+	_ = readData("mod-actions.json", &actions)
+
+	var filtered []modAction
+	for _, action := range actions {
+		if action.GuildID == i.GuildID && action.UserID == targetUser.ID {
+			filtered = append(filtered, action)
+		}
+	}
+
+	if len(filtered) == 0 {
+		embed := createModEmbed(fmt.Sprintf("📋 History - %s", targetUser.Username), "No moderation actions found for this user.")
+		respondEmbed(s, i, embed)
+		return
+	}
+
+	start := 0
+	if len(filtered) > 10 {
+		start = len(filtered) - 10
+	}
+
+	var description string
+	for idx := start; idx < len(filtered); idx++ {
+		a := filtered[idx]
+		ts := time.Unix(a.Timestamp, 0).Format("2006-01-02 15:04")
+		description += fmt.Sprintf("**%s** `%s` — %s\nBy <@%s> | `%s`\n\n", strings.ToUpper(a.Type), a.ID, a.Reason, a.ModeratorID, ts)
+	}
+
+	embed := createModEmbed(fmt.Sprintf("📋 History - %s", targetUser.Username), description)
+	embed.Thumbnail = &discordgo.MessageEmbedThumbnail{URL: userAvatar(targetUser)}
+	embed.Footer = &discordgo.MessageEmbedFooter{Text: fmt.Sprintf("Showing last %d of %d actions • 🛡️ Moderation • %s", len(filtered)-start, len(filtered), botVersion)}
+	respondEmbed(s, i, embed)
+}
+
+// ============================================================================
+// CASE COMMAND
+// ============================================================================
+
+func handleCase(s *discordgo.Session, i *discordgo.InteractionCreate, opts []*discordgo.ApplicationCommandInteractionDataOption) {
+	user := interactionUser(i)
+	if user == nil {
+		respondError(s, i, "Error", "Unable to identify user.")
+		return
+	}
+
+	if !hasPermission(s, i.GuildID, user.ID, discordgo.PermissionManageMessages) {
+		embed := createErrorEmbed("Missing Permissions", "You need the `Manage Messages` permission to use this command.")
+		respondEmbed(s, i, embed)
+		return
+	}
+
+	caseID := optionString(opts, "id", "")
+	if caseID == "" {
+		respondError(s, i, "Missing Input", "You must specify a case ID.")
+		return
+	}
+
+	actions := []modAction{}
+	_ = readData("mod-actions.json", &actions)
+
+	var found *modAction
+	for idx := range actions {
+		if actions[idx].ID == caseID && actions[idx].GuildID == i.GuildID {
+			found = &actions[idx]
+			break
+		}
+	}
+
+	if found == nil {
+		embed := createErrorEmbed("Case Not Found", fmt.Sprintf("No moderation case with ID `%s` was found.", caseID))
+		respondEmbed(s, i, embed)
+		return
+	}
+
+	ts := time.Unix(found.Timestamp, 0).Format("2006-01-02 15:04:05")
+	description := fmt.Sprintf("**Type:** %s\n**User:** <@%s> (%s)\n**Moderator:** <@%s> (%s)\n**Reason:** %s\n**Date:** %s",
+		strings.ToUpper(found.Type), found.UserID, found.Username, found.ModeratorID, found.Moderator, found.Reason, ts)
+
+	if found.Duration > 0 {
+		description += fmt.Sprintf("\n**Duration:** %s", formatDuration(found.Duration))
+	}
+	if found.MessageCount > 0 {
+		description += fmt.Sprintf("\n**Messages Deleted:** %d", found.MessageCount)
+	}
+
+	embed := createModEmbed(fmt.Sprintf("🔍 Case: %s", caseID), description)
+	respondEmbed(s, i, embed)
+}
+
+// ============================================================================
+// REASON COMMAND
+// ============================================================================
+
+func handleReason(s *discordgo.Session, i *discordgo.InteractionCreate, opts []*discordgo.ApplicationCommandInteractionDataOption) {
+	user := interactionUser(i)
+	if user == nil {
+		respondError(s, i, "Error", "Unable to identify user.")
+		return
+	}
+
+	if !hasPermission(s, i.GuildID, user.ID, discordgo.PermissionManageMessages) {
+		embed := createErrorEmbed("Missing Permissions", "You need the `Manage Messages` permission to use this command.")
+		respondEmbed(s, i, embed)
+		return
+	}
+
+	caseID := optionString(opts, "case_id", "")
+	newReason := optionString(opts, "reason", "")
+	if caseID == "" || newReason == "" {
+		respondError(s, i, "Missing Input", "You must specify a case ID and a new reason.")
+		return
+	}
+
+	actions := []modAction{}
+	_ = readData("mod-actions.json", &actions)
+
+	found := false
+	for idx := range actions {
+		if actions[idx].ID == caseID && actions[idx].GuildID == i.GuildID {
+			actions[idx].Reason = newReason
+			found = true
+			break
+		}
+	}
+
+	if !found {
+		embed := createErrorEmbed("Case Not Found", fmt.Sprintf("No moderation case with ID `%s` was found.", caseID))
+		respondEmbed(s, i, embed)
+		return
+	}
+
+	_ = writeData("mod-actions.json", actions)
+
+	embed := createSuccessEmbed("Reason Updated", fmt.Sprintf("Case `%s` reason updated to:\n%s", caseID, newReason))
+	respondEmbed(s, i, embed)
+}
+
+// ============================================================================
+// REPORT COMMAND
+// ============================================================================
+
+func handleReport(s *discordgo.Session, i *discordgo.InteractionCreate, opts []*discordgo.ApplicationCommandInteractionDataOption) {
+	user := interactionUser(i)
+	if user == nil {
+		respondError(s, i, "Error", "Unable to identify user.")
+		return
+	}
+
+	targetUser := optionUser(opts, "user")
+	if targetUser == nil {
+		respondError(s, i, "Missing Input", "You must specify a user to report.")
+		return
+	}
+
+	if targetUser.ID == user.ID {
+		embed := createErrorEmbed("Invalid Report", "You cannot report yourself.")
+		respondEmbed(s, i, embed)
+		return
+	}
+
+	if targetUser.Bot {
+		embed := createErrorEmbed("Invalid Report", "You cannot report bots.")
+		respondEmbed(s, i, embed)
+		return
+	}
+
+	reason := optionString(opts, "reason", "")
+	if reason == "" {
+		respondError(s, i, "Missing Input", "You must provide a reason for the report.")
+		return
+	}
+
+	reports := []modReport{}
+	_ = readData("reports.json", &reports)
+
+	report := modReport{
+		ID:         generateID("report"),
+		ReporterID: user.ID,
+		Reporter:   user.Username,
+		TargetID:   targetUser.ID,
+		Target:     targetUser.Username,
+		Reason:     reason,
+		Timestamp:  time.Now().Unix(),
+		GuildID:    i.GuildID,
+	}
+	reports = append(reports, report)
+	_ = writeData("reports.json", reports)
+
+	embed := createSuccessEmbed("Report Submitted", fmt.Sprintf("Your report against **%s** has been submitted.\nModerators will review it shortly.", targetUser.Username))
+	respondEmbed(s, i, embed)
+}
+
+// ============================================================================
+// REPORTS COMMAND
+// ============================================================================
+
+func handleReports(s *discordgo.Session, i *discordgo.InteractionCreate, opts []*discordgo.ApplicationCommandInteractionDataOption) {
+	user := interactionUser(i)
+	if user == nil {
+		respondError(s, i, "Error", "Unable to identify user.")
+		return
+	}
+
+	if !hasPermission(s, i.GuildID, user.ID, discordgo.PermissionManageMessages) {
+		embed := createErrorEmbed("Missing Permissions", "You need the `Manage Messages` permission to use this command.")
+		respondEmbed(s, i, embed)
+		return
+	}
+
+	reports := []modReport{}
+	_ = readData("reports.json", &reports)
+
+	var filtered []modReport
+	targetUser := optionUser(opts, "user")
+	for _, r := range reports {
+		if r.GuildID != i.GuildID {
+			continue
+		}
+		if targetUser != nil && r.TargetID != targetUser.ID {
+			continue
+		}
+		filtered = append(filtered, r)
+	}
+
+	if len(filtered) == 0 {
+		embed := createModEmbed("📋 Reports", "No reports found.")
+		respondEmbed(s, i, embed)
+		return
+	}
+
+	start := 0
+	if len(filtered) > 10 {
+		start = len(filtered) - 10
+	}
+
+	var description string
+	for idx := start; idx < len(filtered); idx++ {
+		r := filtered[idx]
+		ts := time.Unix(r.Timestamp, 0).Format("2006-01-02 15:04")
+		description += fmt.Sprintf("**Target:** <@%s> | **Reporter:** <@%s>\n%s | `%s`\n\n", r.TargetID, r.ReporterID, r.Reason, ts)
+	}
+
+	title := "📋 Reports"
+	if targetUser != nil {
+		title = fmt.Sprintf("📋 Reports - %s", targetUser.Username)
+	}
+
+	embed := createModEmbed(title, description)
+	embed.Footer = &discordgo.MessageEmbedFooter{Text: fmt.Sprintf("Showing last %d of %d reports • 🛡️ Moderation • %s", len(filtered)-start, len(filtered), botVersion)}
+	respondEmbed(s, i, embed)
+}
+
+// ============================================================================
+// MASSBAN COMMAND
+// ============================================================================
+
+func handleMassban(s *discordgo.Session, i *discordgo.InteractionCreate, opts []*discordgo.ApplicationCommandInteractionDataOption) {
+	user := interactionUser(i)
+	if user == nil {
+		respondError(s, i, "Error", "Unable to identify user.")
+		return
+	}
+
+	if !hasPermission(s, i.GuildID, user.ID, discordgo.PermissionBanMembers) {
+		embed := createErrorEmbed("Missing Permissions", "You need the `Ban Members` permission to use this command.")
+		respondEmbed(s, i, embed)
+		return
+	}
+
+	botPerms, err := s.UserChannelPermissions(s.State.User.ID, i.ChannelID)
+	if err != nil || botPerms&discordgo.PermissionBanMembers == 0 {
+		embed := createErrorEmbed("Bot Missing Permissions", "I don't have permission to ban members.")
+		respondEmbed(s, i, embed)
+		return
+	}
+
+	reason := optionString(opts, "reason", "")
+	if reason == "" {
+		reason = "No reason provided"
+	}
+
+	// Collect target users
+	var targets []*discordgo.User
+	for _, key := range []string{"user1", "user2", "user3", "user4", "user5"} {
+		u := optionUser(opts, key)
+		if u != nil {
+			targets = append(targets, u)
+		}
+	}
+
+	moderator, err := s.GuildMember(i.GuildID, user.ID)
+	if err != nil {
+		respondError(s, i, "Error", "Failed to fetch moderator information.")
+		return
+	}
+
+	var banned []string
+	var failed []string
+
+	for _, t := range targets {
+		if t.Bot {
+			failed = append(failed, fmt.Sprintf("%s (bot)", t.Username))
+			continue
+		}
+
+		target, err := s.GuildMember(i.GuildID, t.ID)
+		if err != nil {
+			target = &discordgo.Member{User: t, GuildID: i.GuildID}
+		} else {
+			if !canModerate(s, i.GuildID, moderator, target) {
+				failed = append(failed, fmt.Sprintf("%s (higher role)", t.Username))
+				continue
+			}
+		}
+
+		err = s.GuildBanCreateWithReason(i.GuildID, t.ID, reason, 0)
+		if err != nil {
+			failed = append(failed, fmt.Sprintf("%s (error)", t.Username))
+			continue
+		}
+
+		action := modAction{
+			ID:          generateID("ban"),
+			Type:        "ban",
+			UserID:      t.ID,
+			Username:    t.Username,
+			ModeratorID: user.ID,
+			Moderator:   user.Username,
+			Reason:      fmt.Sprintf("[Massban] %s", reason),
+			Timestamp:   time.Now().Unix(),
+			GuildID:     i.GuildID,
+		}
+		logModAction(s, i.GuildID, action)
+		banned = append(banned, t.Username)
+	}
+
+	description := fmt.Sprintf("**Reason:** %s\n\n", reason)
+	if len(banned) > 0 {
+		description += fmt.Sprintf("✅ **Banned (%d):** %s\n", len(banned), strings.Join(banned, ", "))
+	}
+	if len(failed) > 0 {
+		description += fmt.Sprintf("❌ **Failed (%d):** %s\n", len(failed), strings.Join(failed, ", "))
+	}
+
+	embed := createSuccessEmbed("Mass Ban Complete", description)
+	respondEmbed(s, i, embed)
+}
+
+// ============================================================================
+// MODNOTE COMMAND
+// ============================================================================
+
+func handleModnote(s *discordgo.Session, i *discordgo.InteractionCreate, opts []*discordgo.ApplicationCommandInteractionDataOption) {
+	user := interactionUser(i)
+	if user == nil {
+		respondError(s, i, "Error", "Unable to identify user.")
+		return
+	}
+
+	if !hasPermission(s, i.GuildID, user.ID, discordgo.PermissionManageMessages) {
+		embed := createErrorEmbed("Missing Permissions", "You need the `Manage Messages` permission to use this command.")
+		respondEmbed(s, i, embed)
+		return
+	}
+
+	targetUser := optionUser(opts, "user")
+	if targetUser == nil {
+		respondError(s, i, "Missing Input", "You must specify a user.")
+		return
+	}
+
+	note := optionString(opts, "note", "")
+	if note == "" {
+		respondError(s, i, "Missing Input", "You must provide a note.")
+		return
+	}
+
+	notes := []modNote{}
+	_ = readData("mod-notes.json", &notes)
+
+	entry := modNote{
+		ID:          generateID("note"),
+		UserID:      targetUser.ID,
+		Username:    targetUser.Username,
+		ModeratorID: user.ID,
+		Moderator:   user.Username,
+		Note:        note,
+		Timestamp:   time.Now().Unix(),
+		GuildID:     i.GuildID,
+	}
+	notes = append(notes, entry)
+	_ = writeData("mod-notes.json", notes)
+
+	embed := createSuccessEmbed("Note Added", fmt.Sprintf("A moderation note has been added for **%s**.\n**Note:** %s", targetUser.Username, note))
+	respondEmbed(s, i, embed)
 }

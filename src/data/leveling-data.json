@@ -1,0 +1,19 @@
+{
+  "guilds": {
+    "1153496849139904552": {
+      "enabled": true,
+      "channelId": "",
+      "multiplier": 1,
+      "rewards": {},
+      "users": {
+        "1070486338643706017": {
+          "username": "sachinshankar",
+          "xp": 25,
+          "level": 0,
+          "totalMessages": 1,
+          "lastXPTime": 1772499494460
+        }
+      }
+    }
+  }
+}

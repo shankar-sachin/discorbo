@@ -9,6 +9,14 @@ import (
 	"github.com/bwmarrin/discordgo"
 )
 
+func handleModalSubmit(s *discordgo.Session, i *discordgo.InteractionCreate) {
+	data := i.ModalSubmitData()
+	if strings.HasPrefix(data.CustomID, "wordle_modal_") {
+		handleWordleModal(s, i)
+		return
+	}
+}
+
 func handleComponent(s *discordgo.Session, i *discordgo.InteractionCreate) {
 	user := interactionUser(i)
 	if user == nil {
@@ -54,6 +62,22 @@ func handleComponent(s *discordgo.Session, i *discordgo.InteractionCreate) {
 	}
 	if strings.HasPrefix(data.CustomID, "hl_") {
 		handleHLComponent(s, i)
+		return
+	}
+	if strings.HasPrefix(data.CustomID, "ttt_") {
+		handleTTTComponent(s, i)
+		return
+	}
+	if strings.HasPrefix(data.CustomID, "c4_") {
+		handleC4Component(s, i)
+		return
+	}
+	if strings.HasPrefix(data.CustomID, "wordle_") {
+		handleWordleComponent(s, i)
+		return
+	}
+	if data.CustomID == "truthordare_reroll" {
+		handleTruthOrDareButton(s, i)
 		return
 	}
 	if !strings.HasPrefix(data.CustomID, "maze_") {
@@ -247,6 +271,9 @@ func handleMessageCreate(s *discordgo.Session, m *discordgo.MessageCreate) {
 
 	// Check auto-moderation rules
 	CheckAutoMod(s, m)
+
+	// Award XP for leveling system
+	awardXP(s, m)
 
 	// Check for DMs or bot mentions and handle with AI
 	isDM := m.GuildID == ""
@@ -465,11 +492,11 @@ func handleTradeComponent(s *discordgo.Session, i *discordgo.InteractionCreate) 
 		_ = writeData("economy-users.json", economyUsers)
 
 		// Build summary
-		summaryLines := fmt.Sprintf("<@%s> gave: **%d coins**", initiatorID, initOffer.Coins)
+		summaryLines := fmt.Sprintf("<@%s> gave: %s", initiatorID, coinDisplay(initOffer.Coins))
 		if len(initOffer.ItemIDs) > 0 {
 			summaryLines += fmt.Sprintf(" + %d item(s)", len(initOffer.ItemIDs))
 		}
-		summaryLines += fmt.Sprintf("\n<@%s> gave: **%d coins**", targetID, targetOffer.Coins)
+		summaryLines += fmt.Sprintf("\n<@%s> gave: %s", targetID, coinDisplay(targetOffer.Coins))
 		if len(targetOffer.ItemIDs) > 0 {
 			summaryLines += fmt.Sprintf(" + %d item(s)", len(targetOffer.ItemIDs))
 		}
@@ -653,14 +680,14 @@ func handleTagComponent(s *discordgo.Session, i *discordgo.InteractionCreate) {
 					loserID = sess.Player1ID
 				}
 
-				// Update daily rewards
-				dailyUsers := map[string]dailyUser{}
-				_ = readData("daily-rewards.json", &dailyUsers)
-				du := dailyUsers[winnerID]
-				du.Coins += coins
-				du.Username = winner
-				dailyUsers[winnerID] = du
-				_ = writeData("daily-rewards.json", dailyUsers)
+				// Update economy
+				ecoUsers := map[string]economyUser{}
+				_ = readData("economy-users.json", &ecoUsers)
+				eu := ecoUsers[winnerID]
+				eu.Coins += coins
+				eu.Username = winner
+				ecoUsers[winnerID] = eu
+				_ = writeData("economy-users.json", ecoUsers)
 
 				// Update tag stats
 				tagStatsMap := map[string]tagStats{}
@@ -687,25 +714,25 @@ func handleTagComponent(s *discordgo.Session, i *discordgo.InteractionCreate) {
 
 				embed.Fields = append(embed.Fields, &discordgo.MessageEmbedField{
 					Name:   "🏆 Winner",
-					Value:  fmt.Sprintf("%s wins and earns %d coins!", winner, coins),
+					Value:  fmt.Sprintf("%s wins and earns %s!", winner, coinDisplay(coins)),
 					Inline: false,
 				})
 			} else {
 				embed.Fields = append(embed.Fields, &discordgo.MessageEmbedField{
 					Name:   "⚖️ Draw",
-					Value:  "Maximum moves reached! Both players earn 10 coins.",
+					Value:  fmt.Sprintf("Maximum moves reached! Both players earn %s.", coinDisplay(10)),
 					Inline: false,
 				})
 
 				// Give both players 10 coins
-				dailyUsers := map[string]dailyUser{}
-				_ = readData("daily-rewards.json", &dailyUsers)
+				ecoUsers := map[string]economyUser{}
+				_ = readData("economy-users.json", &ecoUsers)
 				for _, pid := range []string{sess.Player1ID, sess.Player2ID} {
-					du := dailyUsers[pid]
-					du.Coins += 10
-					dailyUsers[pid] = du
+					eu := ecoUsers[pid]
+					eu.Coins += 10
+					ecoUsers[pid] = eu
 				}
-				_ = writeData("daily-rewards.json", dailyUsers)
+				_ = writeData("economy-users.json", ecoUsers)
 			}
 		} else {
 			buttons = buildTagButtons(sess.SessionID)

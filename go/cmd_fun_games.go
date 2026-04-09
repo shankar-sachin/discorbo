@@ -86,11 +86,11 @@ func handleBattle(s *discordgo.Session, i *discordgo.InteractionCreate, opts []*
 	_ = writeData("battle-stats.json", stats)
 
 	last := strings.Join(logs[max(0, len(logs)-3):], "\n")
-	embed := createFunEmbed("⚔️ Battle Result", fmt.Sprintf("```%s```", last))
+	embed := createBattleEmbed("⚔️ Battle Result", fmt.Sprintf("```%s```", last))
 	embed.Fields = []*discordgo.MessageEmbedField{
-		{Name: "🏆 Winner", Value: winner.Username, Inline: true},
-		{Name: "❤️ Final HP", Value: fmt.Sprintf("%d", winner.HP), Inline: true},
-		{Name: "📊 Streak", Value: fmt.Sprintf("%d wins", stats[winner.ID].Streak), Inline: true},
+		{Name: "🏆 Winner", Value: fmt.Sprintf("**%s**", winner.Username), Inline: true},
+		{Name: "❤️ Final HP", Value: renderHPBar(winner.HP, 100), Inline: false},
+		{Name: "🔥 Win Streak", Value: fmt.Sprintf("**%d** wins", stats[winner.ID].Streak), Inline: true},
 	}
 	embed.Thumbnail = &discordgo.MessageEmbedThumbnail{URL: userAvatar(interactionUser(i))}
 	respondEmbed(s, i, embed)
@@ -107,11 +107,11 @@ func handleDaily(s *discordgo.Session, i *discordgo.InteractionCreate, opts []*d
 		sub = "claim"
 	}
 	_ = subOpts
-	all := map[string]dailyUser{}
-	_ = readData("daily-rewards.json", &all)
+	all := map[string]economyUser{}
+	_ = readData("economy-users.json", &all)
 	u := all[user.ID]
 	if u.Username == "" {
-		u = dailyUser{Username: user.Username}
+		u = economyUser{Username: user.Username}
 	}
 	u.Username = user.Username
 	now := time.Now().UnixMilli()
@@ -157,7 +157,7 @@ func handleDaily(s *discordgo.Session, i *discordgo.InteractionCreate, opts []*d
 		u.LastClaim = now
 		u.TotalClaims++
 		all[user.ID] = u
-		_ = writeData("daily-rewards.json", all)
+		_ = writeData("economy-users.json", all)
 
 		nextClaim := fmt.Sprintf("<t:%d:R>", (now+day)/1000)
 		desc := ""
@@ -169,10 +169,11 @@ func handleDaily(s *discordgo.Session, i *discordgo.InteractionCreate, opts []*d
 		}
 		embed := createSuccessEmbed("Daily Reward Claimed!", desc)
 		embed.Thumbnail = &discordgo.MessageEmbedThumbnail{URL: userAvatar(user)}
+		embed.Footer = embedFooter("💰 Economy")
 		embed.Fields = []*discordgo.MessageEmbedField{
-			{Name: "💰 Coins Earned", Value: fmt.Sprintf("**%d**", reward), Inline: true},
-			{Name: "🔥 Streak", Value: fmt.Sprintf("**%d** days", u.Streak), Inline: true},
-			{Name: "💳 Total Coins", Value: fmt.Sprintf("**%d**", u.Coins), Inline: true},
+			{Name: "💰 Earned", Value: coinDisplay(reward), Inline: true},
+			{Name: "🔥 Streak", Value: streakDisplay(u.Streak), Inline: true},
+			{Name: "💳 Balance", Value: coinDisplay(u.Coins), Inline: true},
 			{Name: "📅 Next Claim", Value: nextClaim, Inline: false},
 		}
 		respondEmbed(s, i, embed)
@@ -184,16 +185,22 @@ func handleDaily(s *discordgo.Session, i *discordgo.InteractionCreate, opts []*d
 			nextText = fmt.Sprintf("<t:%d:R>", next/1000)
 		}
 		level := (u.TotalClaims / 5) + 1
-		embed := createInfoEmbed(fmt.Sprintf("📊 %s's Daily Stats", user.Username), "")
-		embed.Thumbnail = &discordgo.MessageEmbedThumbnail{URL: userAvatar(user)}
-		embed.Fields = []*discordgo.MessageEmbedField{
-			{Name: "💰 Total Coins", Value: fmt.Sprintf("%d", u.Coins), Inline: true},
-			{Name: "🔥 Streak", Value: fmt.Sprintf("%d days", u.Streak), Inline: true},
-			{Name: "📅 Claims", Value: fmt.Sprintf("%d", u.TotalClaims), Inline: true},
-			{Name: "👾 Boss Kills", Value: fmt.Sprintf("%d", u.BossKills), Inline: true},
-			{Name: "⭐ Level", Value: fmt.Sprintf("%d", level), Inline: true},
-			{Name: "⏰ Next Claim", Value: nextText, Inline: true},
-		}
+		embed := richEmbed(richEmbedOpts{
+			Title:        fmt.Sprintf("📊 %s's Daily Stats", user.Username),
+			Color:        ColorEconomy,
+			Category:     "💰 Economy",
+			ThumbnailURL: userAvatar(user),
+			AuthorName:   user.Username,
+			AuthorIcon:   userAvatar(user),
+			Fields: []*discordgo.MessageEmbedField{
+				{Name: "💰 Balance", Value: coinDisplay(u.Coins), Inline: true},
+				{Name: "🔥 Streak", Value: streakDisplay(u.Streak), Inline: true},
+				{Name: "📅 Claims", Value: fmt.Sprintf("**%d**", u.TotalClaims), Inline: true},
+				{Name: "👾 Boss Kills", Value: fmt.Sprintf("**%d**", u.BossKills), Inline: true},
+				{Name: "⭐ Level", Value: fmt.Sprintf("**%d**", level), Inline: true},
+				{Name: "⏰ Next Claim", Value: nextText, Inline: true},
+			},
+		})
 		respondEmbed(s, i, embed)
 	case "leaderboard":
 		type row struct {
@@ -216,19 +223,18 @@ func handleDaily(s *discordgo.Session, i *discordgo.InteractionCreate, opts []*d
 		lines := []string{}
 		medals := []string{"🥇", "🥈", "🥉"}
 		for idx, r := range rows {
-			prefix := fmt.Sprintf("%d.", idx+1)
+			prefix := fmt.Sprintf("`#%d`", idx+1)
 			if idx < len(medals) {
 				prefix = medals[idx]
 			}
-			lines = append(lines, fmt.Sprintf("%s **%s** — %d coins (🔥 %d)", prefix, r.Name, r.Coins, r.Streak))
+			lines = append(lines, fmt.Sprintf("%s **%s** — %s  (%s)", prefix, r.Name, coinDisplay(r.Coins), streakDisplay(r.Streak)))
 		}
-		embed := &discordgo.MessageEmbed{
+		embed := richEmbed(richEmbedOpts{
 			Title:       "💰 Daily Leaderboard",
 			Description: strings.Join(lines, "\n"),
 			Color:       ColorGold,
-			Timestamp:   time.Now().Format(time.RFC3339),
-			Footer:      &discordgo.MessageEmbedFooter{Text: "Discorbo"},
-		}
+			Category:    "💰 Economy",
+		})
 		respondEmbed(s, i, embed)
 	default:
 		respondEmbed(s, i, createErrorEmbed("Unknown Subcommand", "Valid options: claim, stats, leaderboard"))
@@ -252,27 +258,22 @@ func handleBossRaid(s *discordgo.Session, i *discordgo.InteractionCreate, opts [
 		g.Participants = map[string]*raidParticipant{}
 	}
 
-	// HP bar helper
-	hpBar := func(current, max int) string {
-		if max == 0 {
-			return "░░░░░░░░░░"
-		}
-		filled := int(float64(current) / float64(max) * 10)
-		return strings.Repeat("█", filled) + strings.Repeat("░", 10-filled)
+	// HP bar helper using enhanced rendering
+	hpBar := func(current, maximum int) string {
+		return renderHPBar(current, maximum)
 	}
 
 	switch sub {
 	case "status":
 		if g.Boss == nil {
-			respondEmbed(s, i, createInfoEmbed("⚔️ Boss Raid", "No active boss. An admin can spawn one with `/bossraid spawn`."))
+			respondEmbed(s, i, createBattleEmbed("⚔️ Boss Raid", "No active boss. An admin can spawn one with `/fun bossraid spawn`."))
 			return
 		}
-		pct := float64(g.Boss.CurrentHP) / float64(g.Boss.MaxHP) * 100
-		embed := createFunEmbed(fmt.Sprintf("%s %s", g.Boss.Emoji, g.Boss.Name), g.Boss.Description)
+		embed := createBattleEmbed(fmt.Sprintf("%s %s", g.Boss.Emoji, g.Boss.Name), g.Boss.Description)
 		embed.Fields = []*discordgo.MessageEmbedField{
-			{Name: "❤️ HP", Value: fmt.Sprintf("%s `%d/%d` (%.0f%%)", hpBar(g.Boss.CurrentHP, g.Boss.MaxHP), g.Boss.CurrentHP, g.Boss.MaxHP, pct), Inline: false},
-			{Name: "⚔️ Total Damage", Value: fmt.Sprintf("%d", g.TotalDamage), Inline: true},
-			{Name: "👥 Participants", Value: fmt.Sprintf("%d", len(g.Participants)), Inline: true},
+			{Name: "❤️ HP", Value: hpBar(g.Boss.CurrentHP, g.Boss.MaxHP), Inline: false},
+			{Name: "⚔️ Total Damage", Value: fmt.Sprintf("**%d**", g.TotalDamage), Inline: true},
+			{Name: "👥 Participants", Value: fmt.Sprintf("**%d**", len(g.Participants)), Inline: true},
 		}
 		respondEmbed(s, i, embed)
 	case "spawn":
@@ -292,9 +293,9 @@ func handleBossRaid(s *discordgo.Session, i *discordgo.InteractionCreate, opts [
 		g.TotalDamage = 0
 		all[i.GuildID] = g
 		_ = writeData("bossraid.json", all)
-		embed := createFunEmbed(fmt.Sprintf("💀 %s %s Has Appeared!", g.Boss.Emoji, g.Boss.Name), g.Boss.Description)
+		embed := createBattleEmbed(fmt.Sprintf("💀 %s %s Has Appeared!", g.Boss.Emoji, g.Boss.Name), g.Boss.Description)
 		embed.Fields = []*discordgo.MessageEmbedField{
-			{Name: "❤️ HP", Value: fmt.Sprintf("%d", g.Boss.MaxHP), Inline: true},
+			{Name: "❤️ HP", Value: hpBar(g.Boss.MaxHP, g.Boss.MaxHP), Inline: false},
 			{Name: "🎁 Possible Loot", Value: strings.Join(g.Boss.Loot, ", "), Inline: false},
 		}
 		respondEmbed(s, i, embed)
@@ -346,19 +347,19 @@ func handleBossRaid(s *discordgo.Session, i *discordgo.InteractionCreate, opts [
 		_ = writeData("bossraid.json", all)
 
 		if defeated {
-			rewards := map[string]dailyUser{}
-			_ = readData("daily-rewards.json", &rewards)
+			rewards := map[string]economyUser{}
+			_ = readData("economy-users.json", &rewards)
 			for uid, part := range g.Participants {
-				du := rewards[uid]
-				if du.Username == "" {
-					du.Username = part.Username
+				eu := rewards[uid]
+				if eu.Username == "" {
+					eu.Username = part.Username
 				}
-				du.Coins += part.Damage / 10
-				du.BossKills++
-				du.Username = part.Username
-				rewards[uid] = du
+				eu.Coins += part.Damage / 10
+				eu.BossKills++
+				eu.Username = part.Username
+				rewards[uid] = eu
 			}
-			_ = writeData("daily-rewards.json", rewards)
+			_ = writeData("economy-users.json", rewards)
 			loot := g.Boss.Loot[rand.Intn(len(g.Boss.Loot))]
 			critText := ""
 			if crit {
@@ -373,12 +374,11 @@ func handleBossRaid(s *discordgo.Session, i *discordgo.InteractionCreate, opts [
 		if crit {
 			critText = " 💥 CRIT!"
 		}
-		pct := float64(g.Boss.CurrentHP) / float64(g.Boss.MaxHP) * 100
-		embed := createSuccessEmbed("⚔️ Attack!", fmt.Sprintf("You dealt **%d damage**%s to **%s**!", damage, critText, g.Boss.Name))
+		embed := createBattleEmbed("⚔️ Attack!", fmt.Sprintf("You dealt **%d damage**%s to **%s**!", damage, critText, g.Boss.Name))
 		embed.Fields = []*discordgo.MessageEmbedField{
-			{Name: "Boss HP", Value: fmt.Sprintf("%s `%d/%d` (%.0f%%)", hpBar(g.Boss.CurrentHP, g.Boss.MaxHP), g.Boss.CurrentHP, g.Boss.MaxHP, pct), Inline: false},
-			{Name: "Your Total Damage", Value: fmt.Sprintf("%d", p.Damage), Inline: true},
-			{Name: "Your Attacks", Value: fmt.Sprintf("%d", p.Attacks), Inline: true},
+			{Name: "Boss HP", Value: hpBar(g.Boss.CurrentHP, g.Boss.MaxHP), Inline: false},
+			{Name: "Your Total Damage", Value: fmt.Sprintf("**%d**", p.Damage), Inline: true},
+			{Name: "Your Attacks", Value: fmt.Sprintf("**%d**", p.Attacks), Inline: true},
 		}
 		respondEmbed(s, i, embed)
 	case "leaderboard":
@@ -738,22 +738,26 @@ func handleLoot(s *discordgo.Session, i *discordgo.InteractionCreate, opts []*di
 		all[user.ID] = u
 		_ = writeData("loot.json", all)
 		color := rarityColors[rarity]
+		shimmer := ""
+		if rarity == "legendary" || rarity == "cosmic" {
+			shimmer = " ✨✨✨"
+		}
 		embed := &discordgo.MessageEmbed{
-			Title:       fmt.Sprintf("📦 Loot Chest Opened!"),
+			Title:       fmt.Sprintf("📦 Loot Chest Opened!%s", shimmer),
 			Description: fmt.Sprintf("You received: %s **%s**\n*%s*", table.Emoji, item, table.Name),
 			Color:       color,
 			Fields: []*discordgo.MessageEmbedField{
 				{Name: "Rarity", Value: fmt.Sprintf("%s %s", table.Emoji, table.Name), Inline: true},
-				{Name: "Total Loots", Value: fmt.Sprintf("%d", u.TotalLoots), Inline: true},
+				{Name: "Total Loots", Value: fmt.Sprintf("**%d**", u.TotalLoots), Inline: true},
 			},
 			Thumbnail: &discordgo.MessageEmbedThumbnail{URL: userAvatar(user)},
 			Timestamp: time.Now().Format(time.RFC3339),
-			Footer:    &discordgo.MessageEmbedFooter{Text: "Discorbo"},
+			Footer:    embedFooter("🎁 Loot"),
 		}
 		respondEmbed(s, i, embed)
 	case "inventory":
 		if len(u.Inventory) == 0 {
-			respondEmbed(s, i, createInfoEmbed("📦 Loot Inventory", "Your inventory is empty. Use `/loot open` to get items!"))
+			respondEmbed(s, i, createLootEmbed("📦 Loot Inventory", "Your inventory is empty. Use `/fun loot open` to get items!"))
 			return
 		}
 		lines := []string{}
@@ -762,9 +766,18 @@ func handleLoot(s *discordgo.Session, i *discordgo.InteractionCreate, opts []*di
 			table := lootTables[it.Rarity]
 			lines = append(lines, fmt.Sprintf("%s **%s** (%s)", table.Emoji, it.Item, table.Name))
 		}
-		embed := createInfoEmbed(fmt.Sprintf("📦 %s's Loot Inventory", user.Username), strings.Join(lines, "\n"))
-		embed.Thumbnail = &discordgo.MessageEmbedThumbnail{URL: userAvatar(user)}
-		embed.Footer = &discordgo.MessageEmbedFooter{Text: fmt.Sprintf("%d items total | Discorbo", len(u.Inventory))}
+		embed := richEmbed(richEmbedOpts{
+			Title:        fmt.Sprintf("📦 %s's Loot Inventory", user.Username),
+			Description:  strings.Join(lines, "\n"),
+			Color:        ColorLoot,
+			Category:     "🎁 Loot",
+			ThumbnailURL: userAvatar(user),
+		})
+		if len(u.Inventory) > 15 {
+			embed.Fields = append(embed.Fields, &discordgo.MessageEmbedField{
+				Name: "📊 Total", Value: fmt.Sprintf("Showing 15 of %d items", len(u.Inventory)), Inline: false,
+			})
+		}
 		respondEmbed(s, i, embed)
 	case "stats":
 		total := u.TotalLoots
@@ -919,8 +932,8 @@ func handleTag(s *discordgo.Session, i *discordgo.InteractionCreate, opts []*dis
 
 		lines := []string{}
 		for idx, r := range rows {
-			lines = append(lines, fmt.Sprintf("%d. **%s** - %d wins, %d losses (%d coins earned)",
-				idx+1, r.Name, r.Wins, r.Losses, r.CoinsEarned))
+			lines = append(lines, fmt.Sprintf("%s **%s** — %d wins, %d losses (%s earned)",
+				medalPrefix(idx), r.Name, r.Wins, r.Losses, coinDisplay(r.CoinsEarned)))
 		}
 
 		embed := &discordgo.MessageEmbed{
@@ -928,7 +941,7 @@ func handleTag(s *discordgo.Session, i *discordgo.InteractionCreate, opts []*dis
 			Description: strings.Join(lines, "\n"),
 			Color:       ColorGold,
 			Timestamp:   time.Now().Format(time.RFC3339),
-			Footer:      &discordgo.MessageEmbedFooter{Text: "Discorbo"},
+			Footer:      embedFooter("⚔️ Battle"),
 		}
 		respondEmbed(s, i, embed)
 
@@ -964,7 +977,7 @@ func handleTag(s *discordgo.Session, i *discordgo.InteractionCreate, opts []*dis
 		respondEmbed(s, i, embed)
 
 	default:
-		respondText(s, i, "Unknown subcommand.")
+		respondError(s, i, "Error", "Unknown subcommand.")
 	}
 }
 

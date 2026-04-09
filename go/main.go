@@ -84,7 +84,9 @@ func main() {
 		discordgo.IntentsGuildMessages |
 		discordgo.IntentsMessageContent |
 		discordgo.IntentsDirectMessages |
-		discordgo.IntentsDirectMessageTyping
+		discordgo.IntentsDirectMessageTyping |
+		discordgo.IntentsGuildMembers |
+		discordgo.IntentsGuildVoiceStates
 
 	s.AddHandler(func(_ *discordgo.Session, r *discordgo.Ready) {
 		log.Printf("Go bot ready as %s", r.User.Username)
@@ -95,14 +97,34 @@ func main() {
 			handleCommand(s, i)
 		case discordgo.InteractionMessageComponent:
 			handleComponent(s, i)
+		case discordgo.InteractionModalSubmit:
+			handleModalSubmit(s, i)
 		}
 	})
 	s.AddHandler(func(s *discordgo.Session, m *discordgo.MessageCreate) {
 		handleMessageCreate(s, m)
 	})
+	s.AddHandler(func(s *discordgo.Session, m *discordgo.GuildMemberAdd) {
+		handleGuildMemberAdd(s, m)
+	})
+	s.AddHandler(func(s *discordgo.Session, m *discordgo.GuildMemberRemove) {
+		handleGuildMemberRemove(s, m)
+	})
+	s.AddHandler(func(s *discordgo.Session, m *discordgo.MessageDelete) {
+		HandleMessageDelete(s, m)
+	})
 
-	if err := s.Open(); err != nil {
-		log.Fatalf("open session: %v", err)
+	// Connection retry: 3 attempts, 5s delay
+	for attempt := 1; attempt <= 3; attempt++ {
+		if err := s.Open(); err != nil {
+			log.Printf("open session attempt %d/3: %v", attempt, err)
+			if attempt == 3 {
+				log.Fatalf("failed to open session after 3 attempts: %v", err)
+			}
+			time.Sleep(5 * time.Second)
+			continue
+		}
+		break
 	}
 	defer s.Close()
 
@@ -110,11 +132,134 @@ func main() {
 		log.Fatalf("register commands: %v", err)
 	}
 	startReminderLoop(s)
+	startCacheFlush()
+	startSessionCleanup()
 
-	log.Println("Go runtime active (all commands)")
+	// Migrate v1 data if needed
+	migrateV1Data()
+
+	log.Println("Discorbo v2.2 — Go runtime active (all commands)")
 	stop := make(chan os.Signal, 1)
 	signal.Notify(stop, syscall.SIGINT, syscall.SIGTERM)
 	<-stop
+	gracefulShutdown()
+}
+
+func gracefulShutdown() {
+	log.Println("Shutting down gracefully...")
+	flushAllCache()
+	sessionMu.Lock()
+	if len(sessions) > 0 {
+		log.Printf("Cleaning up %d active maze session(s)", len(sessions))
+	}
+	sessionMu.Unlock()
+}
+
+const sessionTTL = 5 * time.Minute
+
+// trackSession records when a session key was created for TTL cleanup.
+func trackSession(key string) {
+	sessionAgeMu.Lock()
+	sessionAge[key] = time.Now().Unix()
+	sessionAgeMu.Unlock()
+}
+
+func startSessionCleanup() {
+	go func() {
+		tick := time.NewTicker(60 * time.Second)
+		defer tick.Stop()
+		for range tick.C {
+			cutoff := time.Now().Add(-sessionTTL).Unix()
+			cleaned := 0
+
+			gameMu.Lock()
+			for k := range bjSessions {
+				if age, ok := sessionAge[k]; ok && age < cutoff {
+					delete(bjSessions, k)
+					cleaned++
+				}
+			}
+			for k := range pokerSessions {
+				if age, ok := sessionAge[k]; ok && age < cutoff {
+					delete(pokerSessions, k)
+					cleaned++
+				}
+			}
+			for k := range fishSessions {
+				if age, ok := sessionAge[k]; ok && age < cutoff {
+					delete(fishSessions, k)
+					cleaned++
+				}
+			}
+			for k := range snapSessions {
+				if age, ok := sessionAge[k]; ok && age < cutoff {
+					delete(snapSessions, k)
+					cleaned++
+				}
+			}
+			for k := range g2048Sessions {
+				if age, ok := sessionAge[k]; ok && age < cutoff {
+					delete(g2048Sessions, k)
+					cleaned++
+				}
+			}
+			for k := range hlSessions {
+				if age, ok := sessionAge[k]; ok && age < cutoff {
+					delete(hlSessions, k)
+					cleaned++
+				}
+			}
+			gameMu.Unlock()
+
+			tttMu.Lock()
+			for k := range tttSessions {
+				if age, ok := sessionAge[k]; ok && age < cutoff {
+					delete(tttSessions, k)
+					cleaned++
+				}
+			}
+			tttMu.Unlock()
+
+			c4Mu.Lock()
+			for k := range c4Sessions {
+				if age, ok := sessionAge[k]; ok && age < cutoff {
+					delete(c4Sessions, k)
+					cleaned++
+				}
+			}
+			c4Mu.Unlock()
+
+			wordleMu.Lock()
+			for k := range wordleSessions {
+				if age, ok := sessionAge[k]; ok && age < cutoff {
+					delete(wordleSessions, k)
+					cleaned++
+				}
+			}
+			wordleMu.Unlock()
+
+			sessionMu.Lock()
+			for k := range sessions {
+				if age, ok := sessionAge[k]; ok && age < cutoff {
+					delete(sessions, k)
+					cleaned++
+				}
+			}
+			sessionMu.Unlock()
+
+			// Clean up age tracker
+			if cleaned > 0 {
+				sessionAgeMu.Lock()
+				for k, age := range sessionAge {
+					if age < cutoff {
+						delete(sessionAge, k)
+					}
+				}
+				sessionAgeMu.Unlock()
+				log.Printf("session cleanup: removed %d expired session(s)", cleaned)
+			}
+		}
+	}()
 }
 
 func registerCommands(s *discordgo.Session, appID, guildID string) error {
@@ -148,6 +293,12 @@ func handleCommand(s *discordgo.Session, i *discordgo.InteractionCreate) {
 		handleEconomyCmd(s, i)
 	case "mod":
 		handleModCmd(s, i)
+	case "level":
+		handleLevelCmd(s, i)
+	case "welcome":
+		handleWelcomeCmd(s, i)
+	case "music":
+		handleMusicCmd(s, i)
 	default:
 		respondText(s, i, "Unknown command: /"+name)
 	}

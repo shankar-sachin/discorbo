@@ -17,13 +17,13 @@ import (
 func handlePoker(s *discordgo.Session, i *discordgo.InteractionCreate, opts []*discordgo.ApplicationCommandInteractionDataOption) {
 	user := interactionUser(i)
 	if user == nil {
-		respondText(s, i, "Unable to identify user.")
+		respondError(s, i, "Error", "Unable to identify user.")
 		return
 	}
 	bet := int(optionInt(opts, "bet", 10))
 	coins, _ := getCoins(user.ID)
 	if coins < bet {
-		respondEmbed(s, i, createErrorEmbed("Insufficient Funds", fmt.Sprintf("You only have **%d coins** but tried to bet **%d**.", coins, bet)))
+		respondEmbed(s, i, createErrorEmbed("Insufficient Funds", fmt.Sprintf("You only have %s but tried to bet %s.", coinDisplay(coins), coinDisplay(bet))))
 		return
 	}
 	modifyCoins(user.ID, user.Username, -bet)
@@ -68,55 +68,36 @@ func handlePoker(s *discordgo.Session, i *discordgo.InteractionCreate, opts []*d
 	}()
 }
 
-const pokerGalleryURL = "https://deckofcardsapi.com/poker"
-
 func buildPokerEmbeds(sess *pokerSession) []*discordgo.MessageEmbed {
-	handDisplay := make([]string, 5)
-	for idx, card := range sess.Hand {
-		if sess.Held[idx] {
-			handDisplay[idx] = "**[" + card + "]**"
-		} else {
-			handDisplay[idx] = card
-		}
-	}
-	phase := "Select cards to HOLD, then click Draw"
+	phase := "Select cards to **HOLD**, then click **Draw**"
 	if sess.Drawn {
-		phase = evaluatePokerHand(sess.Hand)
+		phase = "🏆 " + evaluatePokerHand(sess.Hand)
 	}
-	main := &discordgo.MessageEmbed{
-		URL:         pokerGalleryURL,
+
+	handStr := renderPokerHand(sess.Hand, sess.Held[:])
+
+	embed := &discordgo.MessageEmbed{
 		Title:       "♠️ Video Poker",
-		Description: strings.Join(handDisplay, "  "),
-		Color:       ColorPurple,
+		Description: handStr,
+		Color:       ColorCasino,
 		Fields: []*discordgo.MessageEmbedField{
-			{Name: "Hand", Value: phase, Inline: true},
-			{Name: "Bet", Value: fmt.Sprintf("%d coins", sess.Bet), Inline: true},
+			{Name: "📋 Result", Value: phase, Inline: true},
+			{Name: "💰 Bet", Value: coinDisplay(sess.Bet), Inline: true},
 		},
-		Footer:    &discordgo.MessageEmbedFooter{Text: "Bold = held | Discorbo"},
+		Footer:    &discordgo.MessageEmbedFooter{Text: "✅ = held  •  " + botVersion},
 		Timestamp: time.Now().Format(time.RFC3339),
 	}
-	if len(sess.Hand) > 0 {
-		main.Image = &discordgo.MessageEmbedImage{URL: cardImageURL(sess.Hand[0])}
-	}
-	embeds := []*discordgo.MessageEmbed{main}
-	for _, card := range sess.Hand[1:] {
-		embeds = append(embeds, &discordgo.MessageEmbed{
-			URL:   pokerGalleryURL,
-			Color: ColorPurple,
-			Image: &discordgo.MessageEmbedImage{URL: cardImageURL(card)},
-		})
-	}
-	return embeds
+	return []*discordgo.MessageEmbed{embed}
 }
 
 func buildPokerHoldButtons(sess *pokerSession) []discordgo.MessageComponent {
 	holdRow := discordgo.ActionsRow{Components: []discordgo.MessageComponent{}}
 	for idx := 0; idx < 5; idx++ {
-		label := fmt.Sprintf("Hold %d", idx+1)
+		label := fmt.Sprintf("Card %d", idx+1)
 		style := discordgo.SecondaryButton
 		if sess.Held[idx] {
 			style = discordgo.SuccessButton
-			label = fmt.Sprintf("✓ %d", idx+1)
+			label = fmt.Sprintf("✅ %d", idx+1)
 		}
 		holdRow.Components = append(holdRow.Components, discordgo.Button{
 			Label:    label,
@@ -125,7 +106,7 @@ func buildPokerHoldButtons(sess *pokerSession) []discordgo.MessageComponent {
 		})
 	}
 	drawRow := discordgo.ActionsRow{Components: []discordgo.MessageComponent{
-		discordgo.Button{Label: "Draw", Style: discordgo.PrimaryButton, CustomID: "poker_draw"},
+		discordgo.Button{Label: "🎴 Draw", Style: discordgo.PrimaryButton, CustomID: "poker_draw"},
 	}}
 	return []discordgo.MessageComponent{holdRow, drawRow}
 }
@@ -187,10 +168,10 @@ func handlePokerComponent(s *discordgo.Session, i *discordgo.InteractionCreate) 
 		if mult > 0 {
 			win := int(float64(sess.Bet) * float64(mult))
 			newBal = modifyCoins(user.ID, user.Username, win)
-			resultLine = fmt.Sprintf("🎉 **%s** — +**%d coins** (%dx)\nBalance: **%d coins**", handName, win, mult, newBal)
+			resultLine = fmt.Sprintf("🎉 **%s** — +**%s** (%dx)\nBalance: %s", handName, coinDisplay(win), mult, coinDisplay(newBal))
 		} else {
 			coins, _ := getCoins(user.ID)
-			resultLine = fmt.Sprintf("😞 **%s** — No win.\nBalance: **%d coins**", handName, coins)
+			resultLine = fmt.Sprintf("😞 **%s** — No win.\nBalance: %s", handName, coinDisplay(coins))
 			newBal = coins
 		}
 
@@ -307,7 +288,7 @@ func pokerPayoutMult(hand string) int {
 func handleGoFish(s *discordgo.Session, i *discordgo.InteractionCreate, _ []*discordgo.ApplicationCommandInteractionDataOption) {
 	user := interactionUser(i)
 	if user == nil {
-		respondText(s, i, "Unable to identify user.")
+		respondError(s, i, "Error", "Unable to identify user.")
 		return
 	}
 
@@ -352,19 +333,21 @@ func handleGoFish(s *discordgo.Session, i *discordgo.InteractionCreate, _ []*dis
 }
 
 func buildFishEmbed(sess *fishSession, lastEvent string) *discordgo.MessageEmbed {
-	// Show player hand ranks
+	// Show player hand as compact cards grouped by rank
 	rankSet := map[string]int{}
 	for _, card := range sess.PlayerHand {
 		rankSet[cardRankStr(card)]++
 	}
 	handDisplay := []string{}
 	for r, c := range rankSet {
-		handDisplay = append(handDisplay, fmt.Sprintf("%s×%d", r, c))
+		handDisplay = append(handDisplay, fmt.Sprintf("`%s`×%d", r, c))
 	}
 	sort.Strings(handDisplay)
 
-	desc := fmt.Sprintf("**Your hand:** %s\n**Cards:** %d | **Bot cards:** %d\n**Your books:** %d | **Bot books:** %d",
-		strings.Join(handDisplay, ", "), len(sess.PlayerHand), len(sess.BotHand), sess.PlayerBooks, sess.BotBooks)
+	handCards := renderHand(sess.PlayerHand)
+
+	desc := fmt.Sprintf("🃏 **Your Cards:** %s\n📊 **Ranks:** %s\n\n📦 **Your Books:** %d | **Bot Books:** %d\n🃏 **Your Cards:** %d | **Bot Cards:** %d",
+		handCards, strings.Join(handDisplay, " "), sess.PlayerBooks, sess.BotBooks, len(sess.PlayerHand), len(sess.BotHand))
 	if lastEvent != "" {
 		desc += "\n\n" + lastEvent
 	}
@@ -374,7 +357,7 @@ func buildFishEmbed(sess *fishSession, lastEvent string) *discordgo.MessageEmbed
 		Title:       "🐟 Go Fish",
 		Description: desc,
 		Color:       ColorBlue,
-		Footer:      &discordgo.MessageEmbedFooter{Text: "Collect all 4 of a rank to make a book | Discorbo"},
+		Footer:      &discordgo.MessageEmbedFooter{Text: "Collect 4 of a rank to make a book!  •  " + botVersion},
 		Timestamp:   time.Now().Format(time.RFC3339),
 	}
 }
@@ -594,13 +577,13 @@ func pluralS(n int) string {
 func handleSnap(s *discordgo.Session, i *discordgo.InteractionCreate, opts []*discordgo.ApplicationCommandInteractionDataOption) {
 	user := interactionUser(i)
 	if user == nil {
-		respondText(s, i, "Unable to identify user.")
+		respondError(s, i, "Error", "Unable to identify user.")
 		return
 	}
 	bet := int(optionInt(opts, "bet", 10))
 	coins, _ := getCoins(user.ID)
 	if coins < bet {
-		respondEmbed(s, i, createErrorEmbed("Insufficient Funds", fmt.Sprintf("You only have **%d coins** but tried to bet **%d**.", coins, bet)))
+		respondEmbed(s, i, createErrorEmbed("Insufficient Funds", fmt.Sprintf("You only have %s but tried to bet %s.", coinDisplay(coins), coinDisplay(bet))))
 		return
 	}
 	modifyCoins(user.ID, user.Username, -bet)
@@ -646,9 +629,9 @@ func handleSnap(s *discordgo.Session, i *discordgo.InteractionCreate, opts []*di
 func buildSnapEmbed(sess *snapSession, lastEvent string) *discordgo.MessageEmbed {
 	top := ""
 	if len(sess.LastTwo) >= 2 {
-		top = fmt.Sprintf("**Pile:** %s | %s", sess.LastTwo[0], sess.LastTwo[1])
+		top = fmt.Sprintf("**Pile:** %s  |  %s", renderCard(sess.LastTwo[0]), renderCard(sess.LastTwo[1]))
 	}
-	desc := fmt.Sprintf("%s\n**Deck:** %d cards remaining\n**Bet:** %d coins", top, len(sess.Deck), sess.Bet)
+	desc := fmt.Sprintf("%s\n🃏 **Deck:** %d cards remaining\n💰 **Bet:** %s", top, len(sess.Deck), coinDisplay(sess.Bet))
 	if lastEvent != "" {
 		desc += "\n\n" + lastEvent
 	}
@@ -656,7 +639,7 @@ func buildSnapEmbed(sess *snapSession, lastEvent string) *discordgo.MessageEmbed
 		Title:       "⚡ Snap!",
 		Description: desc,
 		Color:       ColorYellow,
-		Footer:      &discordgo.MessageEmbedFooter{Text: "Press Snap when the top two cards match! | Discorbo"},
+		Footer:      &discordgo.MessageEmbedFooter{Text: "Press SNAP when top two cards match!  •  " + botVersion},
 		Timestamp:   time.Now().Format(time.RFC3339),
 	}
 }
@@ -702,7 +685,7 @@ func handleSnapComponent(s *discordgo.Session, i *discordgo.InteractionCreate) {
 
 		if isMatch {
 			newBal := modifyCoins(user.ID, user.Username, sess.Bet*2)
-			embed := buildSnapEmbed(sess, fmt.Sprintf("⚡ **SNAP!** Correct match! **+%d coins**!\nBalance: **%d coins**", sess.Bet, newBal))
+			embed := buildSnapEmbed(sess, fmt.Sprintf("⚡ **SNAP!** Correct match! **+%s**!\nBalance: %s", coinDisplay(sess.Bet), coinDisplay(newBal)))
 			embed.Color = ColorGreen
 			_ = s.InteractionRespond(i.Interaction, &discordgo.InteractionResponse{
 				Type: discordgo.InteractionResponseUpdateMessage,
@@ -710,7 +693,7 @@ func handleSnapComponent(s *discordgo.Session, i *discordgo.InteractionCreate) {
 			})
 		} else {
 			coins, _ := getCoins(user.ID)
-			embed := buildSnapEmbed(sess, fmt.Sprintf("❌ **False Snap!** Cards don't match. **-%d coins**.\nBalance: **%d coins**", sess.Bet, coins))
+			embed := buildSnapEmbed(sess, fmt.Sprintf("❌ **False Snap!** Cards don't match. **-%s**.\nBalance: %s", coinDisplay(sess.Bet), coinDisplay(coins)))
 			embed.Color = ColorRed
 			_ = s.InteractionRespond(i.Interaction, &discordgo.InteractionResponse{
 				Type: discordgo.InteractionResponseUpdateMessage,
@@ -726,7 +709,7 @@ func handleSnapComponent(s *discordgo.Session, i *discordgo.InteractionCreate) {
 			delete(snapSessions, i.Message.ID)
 			gameMu.Unlock()
 			coins, _ := getCoins(user.ID)
-			embed := buildSnapEmbed(sess, fmt.Sprintf("🤖 **Bot snapped first!** You lose **%d coins**.\nBalance: **%d coins**", sess.Bet, coins))
+			embed := buildSnapEmbed(sess, fmt.Sprintf("🤖 **Bot snapped first!** You lose **%s**.\nBalance: %s", coinDisplay(sess.Bet), coinDisplay(coins)))
 			embed.Color = ColorRed
 			_ = s.InteractionRespond(i.Interaction, &discordgo.InteractionResponse{
 				Type: discordgo.InteractionResponseUpdateMessage,
@@ -740,7 +723,7 @@ func handleSnapComponent(s *discordgo.Session, i *discordgo.InteractionCreate) {
 			delete(snapSessions, i.Message.ID)
 			gameMu.Unlock()
 			newBal := modifyCoins(user.ID, user.Username, sess.Bet)
-			embed := buildSnapEmbed(sess, fmt.Sprintf("🃏 Deck empty! Bet refunded. Balance: **%d coins**", newBal))
+			embed := buildSnapEmbed(sess, fmt.Sprintf("🃏 Deck empty! Bet refunded. Balance: %s", coinDisplay(newBal)))
 			_ = s.InteractionRespond(i.Interaction, &discordgo.InteractionResponse{
 				Type: discordgo.InteractionResponseUpdateMessage,
 				Data: &discordgo.InteractionResponseData{Embeds: []*discordgo.MessageEmbed{embed}, Components: []discordgo.MessageComponent{}},
